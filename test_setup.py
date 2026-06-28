@@ -4,7 +4,7 @@ import anthropic
 load_dotenv()
 client = anthropic.Anthropic()          # reads ANTHROPIC_API_KEY automatically
 msg = client.messages.create(
-    model="claude-sonnet-4-6",          # current Sonnet — the build's workhorse
+    model="claude-sonnet-4-5",          # current Sonnet — the build's workhorse
     max_tokens=50,
     messages=[{"role": "user", "content": "Reply with exactly: setup works"}],
 )
