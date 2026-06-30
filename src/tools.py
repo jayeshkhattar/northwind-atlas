@@ -30,12 +30,12 @@ GET_CUSTOMER_ORDERS_SCHEMA = {
     },
 }
 
+with open("data/orders.json") as f:
+    ORDERS = json.load(f)
 
 def get_customer_orders(customer_id):
-    with open("data/orders.json") as f:
-        orders = json.load(f)
         customer_dict = []
-        for order in orders:
+        for order in ORDERS:
             if order["customer_id"] == customer_id:
                 customer_dict.append(order)
         if not customer_dict:
@@ -43,9 +43,7 @@ def get_customer_orders(customer_id):
         return customer_dict
 
 def get_order_status(order_id):
-    with open("data/orders.json") as f:
-        orders = json.load(f)
-    for order in orders:
+    for order in ORDERS:
         if order_id == order["order_id"]:
             return order
     return {"error": f"No order found with id {order_id}"}

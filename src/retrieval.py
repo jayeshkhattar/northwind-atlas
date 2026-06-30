@@ -2,6 +2,11 @@ from pathlib import Path
 from rank_bm25 import BM25Okapi
 import numpy as np
 
+STOPWORDS = {"how", "do", "i", "get", "my", "the", "a", "an", "is", "to",
+             "of", "and", "in", "on", "for", "it", "with", "back", "can",
+             "you", "me", "what", "are", "does", "did", "from"}
+
+
 def load_kb(kb_dir="data/kb"):
     chunks = []
     for path in Path(kb_dir).glob("*.md"):
@@ -13,7 +18,7 @@ def load_kb(kb_dir="data/kb"):
     return chunks
 
 def tokenize(text):
-    return text.lower().split()
+    return [w for w in text.lower().split() if w not in STOPWORDS]
 
 def build_tokens(chunks):
     tokenized_corpus = [tokenize(chunk["text"]) for chunk in chunks]
@@ -31,6 +36,12 @@ def search(query, chunks, bm25, k=3):
     scores = get_score(bm25, query)
     top_indexes = np.argsort(scores)[::-1][:k]
     return [chunks[i] for i in top_indexes]
+
+def search_scored(query, chunks, bm25, k=5):
+    scores = get_score(bm25, query)
+    top_indexes = np.argsort(scores)[::-1][:k]
+    return [(chunks[i], scores[i]) for i in top_indexes]
+
 
 chunks = load_kb()
 tokens = build_tokens(chunks)
