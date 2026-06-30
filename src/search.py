@@ -35,8 +35,6 @@ def multi_index_search(query, k=3):
 def multi_index_search_score(query, k=3, bm25_min=1.0):    
     scored = search_scored(query, CHUNKS, BM25, 5)
     bm25_hits = [chunk for chunk, score in scored if score >= bm25_min]
-    print("scores:", [round(s, 2) for s in [score for chunk, score in scored]])
-    print("bm25 kept:", len(bm25_hits))
 
     semantic_hits = semantic_search(query, CHUNKS, VECTORS, 5)
     scores = reciprocal_rank_fusion(bm25_hits, semantic_hits)

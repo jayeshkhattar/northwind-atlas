@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import anthropic
-from src.retrieval import load_kb, build_tokens, get_bm, search
+from src.retrieval import load_kb, build_tokens, get_bm, search_scored
+from src.search import multi_index_search_score
 from src.tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
 
 TOOL_FUNCTIONS = {
@@ -22,7 +23,7 @@ Be concise, friendly, and direct. Do not invent policies."""
 
 
 def build_context(query):
-    hits = search(query, chunks, bm25)
+    hits = multi_index_search_score(query)
     blocks = [
         f"{hit['source']} > {hit['heading']} > {hit['text']}"
         for hit in hits
@@ -47,13 +48,17 @@ def send_to_claude(query):
 # print(send_to_claude(query2))
 
 def run_agent(query):
+
+    context = build_context(query)
+    system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" # ← add: inject
+
     messages = [{"role": "user", "content": query}]
 
     while True:
         msg = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=300,
-            system=SYSTEM_PROMPT,
+            system=system,
             tools=[GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA],
             messages=messages,
         )
@@ -78,6 +83,7 @@ def run_agent(query):
         else:
             return msg.content[0].text
 
-#run_agent("where is my order NW-10001?")
-print(run_agent("what are the orders for CUST-007?"))
+#print(run_agent("what are the orders for CUST-007?"))
+print(run_agent("how do I get my money back?"))
+print(run_agent("where is my order NW-10001?"))
 
