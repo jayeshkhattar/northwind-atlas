@@ -39,8 +39,6 @@ def generate_orders(count, customers):
             }
             for _ in range(random.randint(1, 3))
         ]
-
-    for i in range(count):
         order = {
             "order_id" : f"NW-{10001 + i:05d}",
             "customer_id" : random.choice(customers)["customer_id"],

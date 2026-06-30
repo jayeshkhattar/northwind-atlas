@@ -1,7 +1,12 @@
 from dotenv import load_dotenv
 import anthropic
 from src.retrieval import load_kb, build_tokens, get_bm, search
-from src.tools import get_order_status, GET_ORDER_STATUS_SCHEMA
+from src.tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
+
+TOOL_FUNCTIONS = {
+    "get_order_status": get_order_status,
+    "get_customer_orders":get_customer_orders,
+}
 
 
 load_dotenv()
@@ -43,47 +48,36 @@ def send_to_claude(query):
 
 def run_agent(query):
     messages = [{"role": "user", "content": query}]
-    msg = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=300,
-        system=SYSTEM_PROMPT,
-        tools=[GET_ORDER_STATUS_SCHEMA],
-        messages=messages,
-    )
-    messages.append({"role": "assistant", "content": msg.content})
 
-    for block in msg.content:
-        if block.type == 'tool_use':
-            tool_name = block.name
-            tool_input = block.input
-            tool_id = block.id
-    
-    #search for tool_name
-    if tool_name == 'get_order_status':
-        tool_result = get_order_status(tool_input["order_id"])
-
-    messages.append({
-        "role": "user",
-        "content": [
-            {
-                "type": "tool_result",
-                "tool_use_id": tool_id,
-                "content": str(tool_result),
-            }
-        ],
-    })
-
-    if tool_result is not None:
+    while True:
         msg = client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=300,
-        system=SYSTEM_PROMPT,
-        tools=[GET_ORDER_STATUS_SCHEMA],
-        messages=messages,
-    )
-    print("content: ",msg.content)
+            model="claude-sonnet-4-5",
+            max_tokens=300,
+            system=SYSTEM_PROMPT,
+            tools=[GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA],
+            messages=messages,
+        )
+        messages.append({"role": "assistant", "content": msg.content})
+        if msg.stop_reason == 'tool_use':
+            tool_result = None
+            for block in msg.content:
+                if block.type == 'tool_use':
+                    tool_name = block.name
+                    tool_input = block.input
+                    tool_id = block.id    
 
-    return msg
+            #search for tool_name
+            if tool_name in TOOL_FUNCTIONS:
+                fn = TOOL_FUNCTIONS[tool_name]
+                tool_result = fn(**tool_input)
 
-run_agent("where is my order NW-10001?")
+            messages.append({
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
+            })
+        else:
+            return msg.content[0].text
+
+#run_agent("where is my order NW-10001?")
+print(run_agent("what are the orders for CUST-007?"))
 

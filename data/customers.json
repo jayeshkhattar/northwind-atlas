@@ -4,104 +4,104 @@
     "name": "Customer 0",
     "email": "customer0@example.com",
     "tier": "standard",
-    "joined": "2024-07-28T22:23:10.009153"
+    "joined": "2025-11-21T19:48:28.807042"
   },
   {
     "customer_id": "CUST-001",
     "name": "Customer 1",
     "email": "customer1@example.com",
     "tier": "premium",
-    "joined": "2024-09-20T22:23:10.009169"
+    "joined": "2024-10-24T19:48:28.807053"
   },
   {
     "customer_id": "CUST-002",
     "name": "Customer 2",
     "email": "customer2@example.com",
     "tier": "standard",
-    "joined": "2025-03-21T22:23:10.009172"
+    "joined": "2024-12-30T19:48:28.807057"
   },
   {
     "customer_id": "CUST-003",
     "name": "Customer 3",
     "email": "customer3@example.com",
     "tier": "standard",
-    "joined": "2025-05-22T22:23:10.009174"
+    "joined": "2024-08-01T19:48:28.807060"
   },
   {
     "customer_id": "CUST-004",
     "name": "Customer 4",
     "email": "customer4@example.com",
     "tier": "premium",
-    "joined": "2025-10-31T22:23:10.009176"
+    "joined": "2024-11-05T19:48:28.807062"
   },
   {
     "customer_id": "CUST-005",
     "name": "Customer 5",
     "email": "customer5@example.com",
     "tier": "premium",
-    "joined": "2025-09-10T22:23:10.009178"
+    "joined": "2026-06-06T19:48:28.807065"
   },
   {
     "customer_id": "CUST-006",
     "name": "Customer 6",
     "email": "customer6@example.com",
     "tier": "standard",
-    "joined": "2026-06-14T22:23:10.009180"
+    "joined": "2025-11-17T19:48:28.807067"
   },
   {
     "customer_id": "CUST-007",
     "name": "Customer 7",
     "email": "customer7@example.com",
     "tier": "standard",
-    "joined": "2025-02-10T22:23:10.009181"
+    "joined": "2024-12-30T19:48:28.807068"
   },
   {
     "customer_id": "CUST-008",
     "name": "Customer 8",
     "email": "customer8@example.com",
-    "tier": "premium",
-    "joined": "2026-05-04T22:23:10.009183"
+    "tier": "standard",
+    "joined": "2025-06-28T19:48:28.807070"
   },
   {
     "customer_id": "CUST-009",
     "name": "Customer 9",
     "email": "customer9@example.com",
     "tier": "standard",
-    "joined": "2025-03-01T22:23:10.009184"
+    "joined": "2024-08-28T19:48:28.807072"
   },
   {
     "customer_id": "CUST-010",
     "name": "Customer 10",
     "email": "customer10@example.com",
     "tier": "premium",
-    "joined": "2025-06-28T22:23:10.009186"
+    "joined": "2025-04-15T19:48:28.807074"
   },
   {
     "customer_id": "CUST-011",
     "name": "Customer 11",
     "email": "customer11@example.com",
     "tier": "standard",
-    "joined": "2025-05-06T22:23:10.009187"
+    "joined": "2025-09-27T19:48:28.807075"
   },
   {
     "customer_id": "CUST-012",
     "name": "Customer 12",
     "email": "customer12@example.com",
     "tier": "standard",
-    "joined": "2024-07-29T22:23:10.009189"
+    "joined": "2024-12-10T19:48:28.807077"
   },
   {
     "customer_id": "CUST-013",
     "name": "Customer 13",
     "email": "customer13@example.com",
-    "tier": "standard",
-    "joined": "2025-09-10T22:23:10.009190"
+    "tier": "premium",
+    "joined": "2025-10-12T19:48:28.807079"
   },
   {
     "customer_id": "CUST-014",
     "name": "Customer 14",
     "email": "customer14@example.com",
-    "tier": "standard",
-    "joined": "2026-06-02T22:23:10.009192"
+    "tier": "premium",
+    "joined": "2025-10-22T19:48:28.807080"
   }
 ]

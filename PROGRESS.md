@@ -1,9 +1,9 @@
 ## Done
 - Phase 0: env, repo, data generation
-- Phase 1: RAG (BM25) + system prompt + tool use (order lookup) — full agent loop closed
+- Phase 1: RAG (BM25) + system prompt + agent loop + multiple tools (order status, customer orders) with clean dispatch & disambiguation
 
 ## Now
-- Phase 1: handle "tool vs no-tool" + loop for multiple tool calls
+- Phase 1: load-once refactor (stop re-reading JSON per call)
 
 ## Next
-- Phase 1.5: embeddings (second index → multi-index RAG)
+- Phase 1.5: embeddings → multi-index RAG
