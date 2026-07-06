@@ -18,8 +18,11 @@ bm25 = get_bm(build_tokens(chunks))
 
 SYSTEM_PROMPT = """You are a customer support agent for Northwind, a coffee-gear company.
 Answer customer questions using only the provided support documentation.
-If the documentation doesn't contain the answer, say you don't have that information and offer to escalate to a human.
-Be concise, friendly, and direct. Do not invent policies."""
+Answer using the provided documentation and tool results only.
+- If the documentation covers it, answer from the documentation.
+- If a tool provides it (order status, customer orders), report the tool result.
+- If neither the documentation nor a tool provides the answer — especially for 
+contact details, polciies and prices — do not guess or invent one. Say you don't have that information and offer to escalate to a human."""
 
 
 def build_context(query):
@@ -95,4 +98,4 @@ def activate_chat(query, convo_id=-1):
     display_conversation(messages[before:]) # show ONLY the new messages
     save_conversation(convo_id, messages)
 
-#activate_chat("want to talk to a human customer agent", 3)
+activate_chat("want to talk to a human customer agent")
