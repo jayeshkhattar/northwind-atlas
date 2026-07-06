@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import re
 import anthropic
 from .retrieval import load_kb, build_tokens, get_bm, search_scored
 from .search import multi_index_search_score
@@ -33,9 +34,15 @@ def build_context(query):
     ]
     return "\n\n".join(blocks)
 
+def classify(query):
+    if re.search(r"(NW|CUST)-\d+", query):
+        return "tool"
+    else:
+        return "KB"
+
 def send_to_claude(query):
-    blocks = build_context(query)
-    prompt = f"context: {blocks}\n\nquery: {query}"
+    context = build_context(query)
+    prompt = f"context: {context}\n\nquery: {query}"
     msg = client.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=500,
@@ -50,11 +57,35 @@ def send_to_claude(query):
 # print(send_to_claude(query1))
 # print(send_to_claude(query2))
 
+def classify_llm(query):
+    message = f"""You are a query classifier for a coffee-gear support agent.
+    Classify this query: {query} into exactly one word: KB, TOOL, or BOTH.
+    - KB: answerable from support docs (policies, shipping, returns, product info)
+    - TOOL: needs live order status or customer account data
+    - BOTH: needs docs AND live data
+    Reply with exactly one word. Do not explain."""
+    msg = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=10,
+            messages=[{"role":"user", "content":message}],
+        )
+    return msg.content[0].text.strip().upper()
+
 def run_agent(messages, query):
+    #route = classify(query)
+    route = classify_llm(query)
+    print(f"[route: {route}]")   # temporary — see the decision
+    if route == ("KB", "BOTH"):
+        context = build_context(query)
+    else:
+        context = ""
 
-    context = build_context(query)
-    system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" # ← add: inject
+    if context:
+        system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" # ← add: inject
+    else:
+        system = SYSTEM_PROMPT
 
+    TOOLS = [GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA]
     messages.append({"role": "user", "content": query})
 
     while True:
@@ -62,7 +93,7 @@ def run_agent(messages, query):
             model="claude-sonnet-4-5",
             max_tokens=300,
             system=system,
-            tools=[GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA],
+            tools=TOOLS,
             messages=messages,
         )
         messages.append({"role": "assistant", "content": [b.model_dump() for b in msg.content]})
@@ -98,4 +129,4 @@ def activate_chat(query, convo_id=-1):
     display_conversation(messages[before:]) # show ONLY the new messages
     save_conversation(convo_id, messages)
 
-activate_chat("want to talk to a human customer agent")
+#activate_chat("want to talk to a human customer agent")

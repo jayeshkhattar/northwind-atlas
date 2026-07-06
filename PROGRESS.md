@@ -35,12 +35,10 @@ Project: Northwind support/ops agent. Learning mode (I write code, Claude review
 - Phase 1: unified agent — RAG context + tools in one call
 - Conversation management: multi-turn memory + persistent JSON storage (load/save/display, auto-increment ids), survives restarts
 - Evals: full harness — dataset (input/expected/grader shape), runner with per-case dispatch, code grader (case-insensitive substring, robust to en-dash traps), model grader (constrained one-word output, `startswith("PASS")` defensive parse). 6/6 on current cases.
-
-## Now
 - Hallucination fix — Atlas fabricated `support@northwind.com` and `1-800-NORTHWIND`. Verify KB is silent on these, tighten system prompt against fabrication, use existing phone-number eval case to measure before/after.
+- Query routing (decide whether to retrieve vs always-retrieve; today RAG context is injected on every call including pure tool questions)
 
 ## Next
-- Query routing (decide whether to retrieve vs always-retrieve; today RAG context is injected on every call including pure tool questions)
 - Reranking (production-grade alternative to BM25 threshold guard)
 - Split chat.py out of agent.py (display/orchestration separation)
 - Phase 2: image + PDF intake
