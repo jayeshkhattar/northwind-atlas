@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 import anthropic
-from src.retrieval import load_kb, build_tokens, get_bm, search_scored
-from src.search import multi_index_search_score
-from src.tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
-
+from .retrieval import load_kb, build_tokens, get_bm, search_scored
+from .search import multi_index_search_score
+from .tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
+from .conversations import load_conversation, save_conversation, display_conversation, next_convo_id
 TOOL_FUNCTIONS = {
     "get_order_status": get_order_status,
     "get_customer_orders":get_customer_orders,
@@ -47,12 +47,12 @@ def send_to_claude(query):
 # print(send_to_claude(query1))
 # print(send_to_claude(query2))
 
-def run_agent(query):
+def run_agent(messages, query):
 
     context = build_context(query)
     system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" # ← add: inject
 
-    messages = [{"role": "user", "content": query}]
+    messages.append({"role": "user", "content": query})
 
     while True:
         msg = client.messages.create(
@@ -62,7 +62,7 @@ def run_agent(query):
             tools=[GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA],
             messages=messages,
         )
-        messages.append({"role": "assistant", "content": msg.content})
+        messages.append({"role": "assistant", "content": [b.model_dump() for b in msg.content]})
         if msg.stop_reason == 'tool_use':
             tool_result = None
             for block in msg.content:
@@ -81,9 +81,18 @@ def run_agent(query):
                 "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
             })
         else:
-            return msg.content[0].text
+            return messages
 
-#print(run_agent("what are the orders for CUST-007?"))
-print(run_agent("how do I get my money back?"))
-print(run_agent("where is my order NW-10001?"))
+def activate_chat(query, convo_id=-1):
+    if convo_id == -1:
+        convo_id = next_convo_id()
+        messages = []
+    else:
+        messages = load_conversation(convo_id)
+    display_conversation(messages)
+    before = len(messages)
+    messages = run_agent(messages, query)
+    display_conversation(messages[before:]) # show ONLY the new messages
+    save_conversation(convo_id, messages)
 
+#activate_chat("want to talk to a human customer agent", 3)

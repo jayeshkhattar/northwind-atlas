@@ -55,6 +55,3 @@ query = "how long do refunds take"
 
 #results = multi_index_search(query)
 results = multi_index_search_score(query)
-
-for hit in results:
-    print(hit["source"], "→", hit["heading"])
