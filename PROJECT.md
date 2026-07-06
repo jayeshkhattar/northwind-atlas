@@ -68,11 +68,11 @@ exercise). Grouped by course section.
 - [ ] Structured data / structured output
 
 ### Prompt evaluation
-- [ ] Prompt evals (typical eval workflow)
-- [ ] Generating test datasets
-- [ ] Running the eval
-- [ ] Model-based grading
-- [ ] Code-based grading
+- [x] Prompt evals (typical eval workflow)
+- [x] Generating test datasets
+- [x] Running the eval
+- [x] Model-based grading
+- [x] Code-based grading
 
 ### Prompt engineering
 - [ ] Being clear and direct
@@ -81,23 +81,23 @@ exercise). Grouped by course section.
 - [ ] Providing examples
 
 ### Tool use
-- [ ] Using tools / tool functions
-- [ ] Tool schemas
-- [ ] Handling message blocks
-- [ ] Sending tool results
-- [ ] Multi-turn conversations with tools
-- [ ] Implementing multiple turns
-- [ ] Using multiple tools
+- [x] Using tools / tool functions
+- [x] Tool schemas
+- [x] Handling message blocks
+- [x] Sending tool results
+- [x] Multi-turn conversations with tools
+- [x] Implementing multiple turns
+- [x] Using multiple tools
 - [ ] Fine-grained tool calling
 - [ ] Text edit tool
 - [ ] Web search tool
 
 ### RAG & agentic search
-- [ ] Text chunking (multiple chunking strategies)
-- [ ] Text embeddings
-- [ ] Implementing the full RAG flow
-- [ ] BM25 lexical search
-- [ ] Multi-index RAG pipeline
+- [x] Text chunking (multiple chunking strategies)
+- [x] Text embeddings
+- [x] Implementing the full RAG flow
+- [x] BM25 lexical search
+- [x] Multi-index RAG pipeline
 
 ### Features of Claude
 - [ ] Extended thinking (enabled and disabled)
@@ -175,6 +175,11 @@ setup, defining tools/resources/prompts, accessing resources, prompts-in-client.
   thinking for escalation.
 - **Phase 4 — Evals:** test dataset, model + code grading, fix what it surfaces.
 - **Phase 5 — Polish:** README, demo script, 90-second interview walkthrough.
+
+> **Build order note:** Evals are built early (not Phase 4) and used as the
+> safety net for every later phase — the harness (dataset → runner → code +
+> model grading) is already working, so each subsequent change is measured
+> before it's kept. Phase numbers describe scope, not strict sequence.
 
 Each phase: Claude scopes → I write the Python → Claude reviews for correctness
 and idioms. ~2–3 focused sessions per phase.
