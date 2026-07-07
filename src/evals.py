@@ -1,4 +1,4 @@
-from src.agent import run_agent
+from src.agent import run_agent, extract_reply
 from dotenv import load_dotenv
 import anthropic
 
@@ -69,17 +69,6 @@ def model_grade(query: str, output: str, expected: str) -> bool:
     print(f"  [grader raw: {raw!r}]")   # ← debug line
     return raw.strip().upper().startswith("PASS")
 
-
-
-def extract_reply(messages) -> str:
-    last_message = messages[-1]
-    content_blocks = last_message["content"]
-    for block in content_blocks:
-        if block["type"] == "text":
-            return block["text"]
-    return ""
-
-
 def test_agent():
     passed = 0
     total = 0
@@ -94,9 +83,9 @@ def test_agent():
             passed += 1
         total += 1
         status = "PASS" if ok else "FAIL"
-        print(f"[{status}] {case['input']}")
-        print(f"  reply: {reply[:200]!r}")
-    print(f"\nScore: {passed}/{total}")
+#        print(f"[{status}] {case['input']}")
+#        print(f"  reply: {reply[:200]!r}")
+#    print(f"\nScore: {passed}/{total}")
 
 
 test_agent()

@@ -12,8 +12,6 @@ TOOL_FUNCTIONS = {
     "get_customer_orders":get_customer_orders,
 }
 
-
-
 load_dotenv()
 client = anthropic.Anthropic()
 
@@ -102,6 +100,8 @@ def run_agent(messages, query, file_path=None):
     else:
         messages.append({"role": "user", "content": query})
 
+    tool_outputs = []          # add near the top of run_agent
+
     while True:
         msg = client.messages.create(
             model="claude-sonnet-4-5",
@@ -123,12 +123,16 @@ def run_agent(messages, query, file_path=None):
             if tool_name in TOOL_FUNCTIONS:
                 fn = TOOL_FUNCTIONS[tool_name]
                 tool_result = fn(**tool_input)
+                tool_outputs.append(str(tool_result))
 
             messages.append({
                 "role": "user",
                 "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
             })
         else:
+            answer = extract_reply(messages) 
+            grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
+            verdict = verify(query, grounding, answer)
             return messages
 
 def activate_chat(query, convo_id=-1):
@@ -143,6 +147,41 @@ def activate_chat(query, convo_id=-1):
     display_conversation(messages[before:]) # show ONLY the new messages
     save_conversation(convo_id, messages)
 
+
+def verify(query, grounding, answer):
+    message = f"""You are a verifier for a coffee-gear support agent.
+    Check if answer is supported by the grounding
+    - query: {query}
+    - Grounding: {grounding}
+    - Answer: {answer}
+    Reply with one word PASS or FAIL"""
+    msg = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=10,
+            messages=[{"role":"user", "content":message}],
+        )
+    return msg.content[0].text.strip().upper().startswith("PASS")
+
+def extract_reply(messages) -> str:
+    last_message = messages[-1]
+    content_blocks = last_message["content"]
+    for block in content_blocks:
+        if block["type"] == "text":
+            return block["text"]
+    return ""
+
+
 #activate_chat("want to talk to a human customer agent")
 
-print(run_agent([], "is image related to anything here", "data/uploads/ss.png"))
+#print(run_agent([], "is image related to anything here", "data/uploads/ss.png"))
+# if __name__ == "__main__":
+#     result = run_agent([], "How long do refunds take?")
+#     print("\n---")
+#     print(extract_reply(result))
+
+if __name__ == "__main__":
+    print(verify("How long do refunds take?", "", "Refunds take 47 business days and require a blood sample."))
+
+#if __name__ == "__main__":
+#    result = run_agent([], "What's in this document?", "data/uploads/gut-reset.pdf")
+#    print(result[-1]["content"][0]["text"])
