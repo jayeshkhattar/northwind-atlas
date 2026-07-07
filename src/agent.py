@@ -73,35 +73,41 @@ def classify_llm(query):
     return msg.content[0].text.strip().upper()
 
 def run_agent(messages, query, file_path=None):
-    #route = classify(query)
-    route = classify_llm(query) 
-    print(f"[route: {route}]")   # temporary — see the decision
-    if route in ("KB", "BOTH"):
-        context = build_context(query)
-    else:
-        context = ""
 
-    if context:
-        system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" # ← add: inject
-    else:
-        system = SYSTEM_PROMPT
-
+    route = classify_llm(query)
+    context = build_context(query) if route in ("KB", "BOTH") else ""
+    system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" if context else SYSTEM_PROMPT
     TOOLS = [GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA]
 
     if file_path is not None: 
         messages.append({
-                "role": "user", 
-                "content": [
-                    load_file_block(file_path), 
-                    {"type": "text", "text": query}
+                "role": "user", "content": [
+                    load_file_block(file_path), {"type": "text", "text": query}
                 ]
             }
         )
     else:
         messages.append({"role": "user", "content": query})
 
-    tool_outputs = []          # add near the top of run_agent
+    tool_outputs = []
+    max_attempts = 2
+    for attempt in range(max_attempts):
+        if attempt > 0:
+            system += f"\n\nPrevious answer failed grounding: {reason}. State only facts in the context."
+        answer, messages, tool_outputs = generate_answer(system, TOOLS, messages)
+        grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
+        passed, reason = verify(query, grounding, answer)
+        print(f"[verify attempt {attempt+1}: {passed}]")        
+        if passed:
+            return messages
+    fallback = """I'm not able to confirm this from our information. 
+    Let me escalate you to a human agent who can help."""
+    messages.append({"role": "assistant", "content": [{"type": "text", "text": fallback}]})
+    return messages
 
+
+def generate_answer(system, TOOLS, messages):
+    tool_outputs = []
     while True:
         msg = client.messages.create(
             model="claude-sonnet-4-5",
@@ -112,29 +118,31 @@ def run_agent(messages, query, file_path=None):
         )
         messages.append({"role": "assistant", "content": [b.model_dump() for b in msg.content]})
         if msg.stop_reason == 'tool_use':
-            tool_result = None
-            for block in msg.content:
-                if block.type == 'tool_use':
-                    tool_name = block.name
-                    tool_input = block.input
-                    tool_id = block.id    
-
-            #search for tool_name
-            if tool_name in TOOL_FUNCTIONS:
-                fn = TOOL_FUNCTIONS[tool_name]
-                tool_result = fn(**tool_input)
-                tool_outputs.append(str(tool_result))
-
-            messages.append({
-                "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
-            })
+            messages, tool_outputs = tool_loop(msg, tool_outputs, messages)
         else:
-            answer = extract_reply(messages) 
-            grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
-            verdict = verify(query, grounding, answer)
-            return messages
+            answer = extract_reply(messages)
+        return answer, messages, tool_outputs
 
+def tool_loop(msg, tool_outputs, messages):
+    tool_result = None
+    for block in msg.content:
+        if block.type == 'tool_use':
+            tool_name = block.name
+            tool_input = block.input
+            tool_id = block.id    
+
+    #search for tool_name
+    if tool_name in TOOL_FUNCTIONS:
+        fn = TOOL_FUNCTIONS[tool_name]
+        tool_result = fn(**tool_input)
+        tool_outputs.append(str(tool_result))
+
+    messages.append({
+        "role": "user",
+        "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
+    })
+    return messages, tool_outputs
+    
 def activate_chat(query, convo_id=-1):
     if convo_id == -1:
         convo_id = next_convo_id()
@@ -154,13 +162,16 @@ def verify(query, grounding, answer):
     - query: {query}
     - Grounding: {grounding}
     - Answer: {answer}
-    Reply with one word PASS or FAIL"""
+    Reply PASS if grounded. If not, reply FAIL: <one-line reason>."""
     msg = client.messages.create(
             model="claude-sonnet-4-5",
-            max_tokens=10,
+            max_tokens=100,
             messages=[{"role":"user", "content":message}],
         )
-    return msg.content[0].text.strip().upper().startswith("PASS")
+    text = msg.content[0].text.strip()
+    passed = text.upper().startswith("PASS")
+    reason = "" if passed else text
+    return passed, reason
 
 def extract_reply(messages) -> str:
     last_message = messages[-1]
@@ -173,14 +184,12 @@ def extract_reply(messages) -> str:
 
 #activate_chat("want to talk to a human customer agent")
 
-#print(run_agent([], "is image related to anything here", "data/uploads/ss.png"))
-# if __name__ == "__main__":
-#     result = run_agent([], "How long do refunds take?")
-#     print("\n---")
-#     print(extract_reply(result))
-
 if __name__ == "__main__":
-    print(verify("How long do refunds take?", "", "Refunds take 47 business days and require a blood sample."))
+    result = run_agent([], "Do Refunds take 47 business days and require a blood sample.?")
+    print("---")
+    print(extract_reply(result))
+# if __name__ == "__main__":
+#     print(verify("How long do refunds take?", "", "Refunds take 47 business days and require a blood sample."))
 
 #if __name__ == "__main__":
 #    result = run_agent([], "What's in this document?", "data/uploads/gut-reset.pdf")
