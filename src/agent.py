@@ -5,10 +5,13 @@ from .retrieval import load_kb, build_tokens, get_bm, search_scored
 from .search import multi_index_search_score
 from .tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
 from .conversations import load_conversation, save_conversation, display_conversation, next_convo_id
+from .multimodal import load_file_block
+
 TOOL_FUNCTIONS = {
     "get_order_status": get_order_status,
     "get_customer_orders":get_customer_orders,
 }
+
 
 
 load_dotenv()
@@ -71,11 +74,11 @@ def classify_llm(query):
         )
     return msg.content[0].text.strip().upper()
 
-def run_agent(messages, query):
+def run_agent(messages, query, file_path=None):
     #route = classify(query)
-    route = classify_llm(query)
+    route = classify_llm(query) 
     print(f"[route: {route}]")   # temporary — see the decision
-    if route == ("KB", "BOTH"):
+    if route in ("KB", "BOTH"):
         context = build_context(query)
     else:
         context = ""
@@ -86,7 +89,18 @@ def run_agent(messages, query):
         system = SYSTEM_PROMPT
 
     TOOLS = [GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA]
-    messages.append({"role": "user", "content": query})
+
+    if file_path is not None: 
+        messages.append({
+                "role": "user", 
+                "content": [
+                    load_file_block(file_path), 
+                    {"type": "text", "text": query}
+                ]
+            }
+        )
+    else:
+        messages.append({"role": "user", "content": query})
 
     while True:
         msg = client.messages.create(
@@ -130,3 +144,5 @@ def activate_chat(query, convo_id=-1):
     save_conversation(convo_id, messages)
 
 #activate_chat("want to talk to a human customer agent")
+
+print(run_agent([], "is image related to anything here", "data/uploads/ss.png"))
