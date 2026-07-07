@@ -121,7 +121,7 @@ def generate_answer(system, TOOLS, messages):
             messages, tool_outputs = tool_loop(msg, tool_outputs, messages)
         else:
             answer = extract_reply(messages)
-        return answer, messages, tool_outputs
+            return answer, messages, tool_outputs
 
 def tool_loop(msg, tool_outputs, messages):
     tool_result = None
