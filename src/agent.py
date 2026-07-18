@@ -12,20 +12,57 @@ TOOL_FUNCTIONS = {
     "get_customer_orders":get_customer_orders,
 }
 
+model_name = "claude-haiku-4-5"
+
 load_dotenv()
 client = anthropic.Anthropic()
 
 chunks = load_kb()
 bm25 = get_bm(build_tokens(chunks))
 
-SYSTEM_PROMPT = """You are a customer support agent for Northwind, a coffee-gear company.
-Answer customer questions using only the provided support documentation.
-Answer using the provided documentation and tool results only.
+# SYSTEM_PROMPT = """You are a customer support agent for Northwind, a coffee-gear company.
+# Answer customer questions using only the provided support documentation.
+# Answer using the provided documentation and tool results only.
+# - If the documentation covers it, answer from the documentation.
+# - If a tool provides it (order status, customer orders), report the tool result.
+# - If neither the documentation nor a tool provides the answer — especially for 
+# contact details, polciies and prices — do not guess or invent one. Say you don't have that information and offer to escalate to a human."""
+
+SYSTEM_PROMPT = """You are a customer support agent for Northwind, a premium coffee-gear company specializing in grinders, espresso machines, pour-over equipment, beans, and accessories.
+
+CORE RULES:
+- Answer using the provided documentation and tool results only.
 - If the documentation covers it, answer from the documentation.
 - If a tool provides it (order status, customer orders), report the tool result.
-- If neither the documentation nor a tool provides the answer — especially for 
-contact details, polciies and prices — do not guess or invent one. Say you don't have that information and offer to escalate to a human."""
+- If neither the documentation nor a tool provides the answer — especially for contact details, phone numbers, email addresses, policies, or prices — do not guess or invent one. Say you don't have that information and offer to escalate to a human.
 
+TONE AND STYLE:
+- Be warm, concise, and professional. Northwind customers are enthusiasts who care about their equipment.
+- Use plain language. Avoid jargon unless the customer uses it first.
+- Never be pushy or salesy. Your job is to resolve the issue, not upsell.
+- Acknowledge frustration when a customer is upset, but don't over-apologize.
+- Keep responses focused — answer the question asked, then stop.
+
+HANDLING ORDERS:
+- Order IDs follow the format NW-##### (e.g. NW-10001). Customer IDs follow CUST-### (e.g. CUST-014).
+- When a customer asks about an order, use the order-lookup tool rather than guessing status.
+- Order statuses are: processing, shipped, delivered, cancelled, returned. Do not invent other statuses.
+- If a customer references an order you can't find, ask them to double-check the ID rather than assuming it doesn't exist.
+
+HANDLING RETURNS AND REFUNDS:
+- Only quote return and refund timelines that appear in the documentation.
+- Do not promise specific refund amounts unless the documentation or a tool provides them.
+- If a return is outside policy, explain the policy rather than making an exception you can't authorize.
+
+ESCALATION:
+- Escalate to a human when: the customer explicitly asks, the issue involves a defect or safety concern, the request is outside documented policy, or you cannot ground an answer in the documentation or tools.
+- When escalating, confirm the escalation clearly and do not fabricate contact details or timelines for the human team.
+
+WHAT YOU MUST NEVER DO:
+- Never invent phone numbers, email addresses, or support URLs.
+- Never quote prices, discounts, or promotions not present in the documentation.
+- Never state a policy you cannot find in the documentation.
+- Never guess at shipping destinations or timelines beyond what the documentation states."""
 
 def build_context(query):
     hits = multi_index_search_score(query)
@@ -45,7 +82,7 @@ def send_to_claude(query):
     context = build_context(query)
     prompt = f"context: {context}\n\nquery: {query}"
     msg = client.messages.create(
-        model="claude-sonnet-4-5",
+        model=model_name,
         max_tokens=500,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -66,17 +103,25 @@ def classify_llm(query):
     - BOTH: needs docs AND live data
     Reply with exactly one word. Do not explain."""
     msg = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=model_name,
             max_tokens=10,
             messages=[{"role":"user", "content":message}],
         )
     return msg.content[0].text.strip().upper()
 
-def run_agent(messages, query, file_path=None):
+async def run_agent(session, messages, query, file_path=None):
 
     route = classify_llm(query)
     context = build_context(query) if route in ("KB", "BOTH") else ""
-    system = f"{SYSTEM_PROMPT}\n\nRelevant documentation:\n{context}" if context else SYSTEM_PROMPT
+    system = [
+        {
+            "type": "text", "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"}
+        },
+    ]
+    if context:
+        system.append({"type": "text", "text": f"Relevant documentation:\n{context}"})
+    
     TOOLS = [GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA]
 
     if file_path is not None: 
@@ -93,11 +138,11 @@ def run_agent(messages, query, file_path=None):
     max_attempts = 2
     for attempt in range(max_attempts):
         if attempt > 0:
-            system += f"\n\nPrevious answer failed grounding: {reason}. State only facts in the context."
-        answer, messages, tool_outputs = generate_answer(system, TOOLS, messages)
+            system.append({"type": "text", "text": f"\nPrevious answer failed grounding: {reason}. State only facts in the context."})
+        answer, messages, tool_outputs = await generate_answer(session, system, TOOLS, messages)
         grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
         passed, reason = verify(query, grounding, answer)
-        print(f"[verify attempt {attempt+1}: {passed}]")        
+        #print(f"[verify attempt {attempt+1}: {passed}]")        
         if passed:
             return messages
     fallback = """I'm not able to confirm this from our information. 
@@ -106,24 +151,28 @@ def run_agent(messages, query, file_path=None):
     return messages
 
 
-def generate_answer(system, TOOLS, messages):
+async def generate_answer(session, system, TOOLS, messages):
     tool_outputs = []
     while True:
         msg = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=model_name,
             max_tokens=300,
             system=system,
             tools=TOOLS,
             messages=messages,
         )
+        print(f"""[cache: created={msg.usage.cache_creation_input_tokens}, 
+              read={msg.usage.cache_read_input_tokens}]""")
+
         messages.append({"role": "assistant", "content": [b.model_dump() for b in msg.content]})
         if msg.stop_reason == 'tool_use':
-            messages, tool_outputs = tool_loop(msg, tool_outputs, messages)
+            messages, tool_outputs = await tool_loop(session, msg, tool_outputs, messages)
         else:
             answer = extract_reply(messages)
             return answer, messages, tool_outputs
 
-def tool_loop(msg, tool_outputs, messages):
+async def tool_loop(session, msg, tool_outputs, messages):
+
     tool_result = None
     for block in msg.content:
         if block.type == 'tool_use':
@@ -134,7 +183,11 @@ def tool_loop(msg, tool_outputs, messages):
     #search for tool_name
     if tool_name in TOOL_FUNCTIONS:
         fn = TOOL_FUNCTIONS[tool_name]
-        tool_result = fn(**tool_input)
+        #tool_result = fn(**tool_input)
+        tool_result = []
+        result = await session.call_tool(tool_name, tool_input)
+        for content in result.content:
+            tool_result.append(content.text)
         tool_outputs.append(str(tool_result))
 
     messages.append({
@@ -151,7 +204,8 @@ def activate_chat(query, convo_id=-1):
         messages = load_conversation(convo_id)
     display_conversation(messages)
     before = len(messages)
-    messages = run_agent(messages, query)
+    session = []
+    messages = run_agent(session, messages, query)
     display_conversation(messages[before:]) # show ONLY the new messages
     save_conversation(convo_id, messages)
 
@@ -164,7 +218,7 @@ def verify(query, grounding, answer):
     - Answer: {answer}
     Reply PASS if grounded. If not, reply FAIL: <one-line reason>."""
     msg = client.messages.create(
-            model="claude-sonnet-4-5",
+            model=model_name,
             max_tokens=100,
             messages=[{"role":"user", "content":message}],
         )
@@ -184,10 +238,10 @@ def extract_reply(messages) -> str:
 
 #activate_chat("want to talk to a human customer agent")
 
-if __name__ == "__main__":
-    result = run_agent([], "Do Refunds take 47 business days and require a blood sample.?")
-    print("---")
-    print(extract_reply(result))
+# if __name__ == "__main__":
+#     result = run_agent([], [], "Do Refunds take 47 business days and require a blood sample.?")
+#     print("---")
+#     print(extract_reply(result))
 # if __name__ == "__main__":
 #     print(verify("How long do refunds take?", "", "Refunds take 47 business days and require a blood sample."))
 

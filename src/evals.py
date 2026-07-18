@@ -1,7 +1,9 @@
 from src.agent import run_agent, extract_reply
 from dotenv import load_dotenv
 import anthropic
-
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+import asyncio
 
 load_dotenv()
 client = anthropic.Anthropic()
@@ -21,6 +23,11 @@ TEST_CASES = [
     {
         "input": "Show me all orders for customer CUST-014.",
         "expected": "NW-10001",
+        "grader": "code",
+    },
+    {
+        "input": "Show me all orders for customer CUST-001.",
+        "expected": "NW-10043",#NW-10024, 
         "grader": "code",
     },
 
@@ -69,11 +76,11 @@ def model_grade(query: str, output: str, expected: str) -> bool:
     print(f"  [grader raw: {raw!r}]")   # ← debug line
     return raw.strip().upper().startswith("PASS")
 
-def test_agent():
+async def test_agent(session):
     passed = 0
     total = 0
     for case in TEST_CASES:
-        messages = run_agent([], case["input"])
+        messages = await run_agent(session, [], case["input"])
         reply = extract_reply(messages)
         if case["grader"] == "code":
             ok = grade(reply, case["expected"])
@@ -83,9 +90,18 @@ def test_agent():
             passed += 1
         total += 1
         status = "PASS" if ok else "FAIL"
-#        print(f"[{status}] {case['input']}")
-#        print(f"  reply: {reply[:200]!r}")
-#    print(f"\nScore: {passed}/{total}")
+        print(f"[{status}] {case['input']}")
+        print(f"  reply: {reply[:200]!r}")
+    print(f"\nScore: {passed}/{total}")
 
 
-test_agent()
+server_params = StdioServerParameters(command="python", args=["-m", "src.mcp_server"])
+
+async def main():
+    async with stdio_client(server_params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            await test_agent(session)
+
+if __name__ == "__main__":
+    asyncio.run(main())
