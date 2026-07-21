@@ -12,41 +12,54 @@ Project: Northwind support/ops agent. Learning mode (I write code, Claude review
 - Query routing — v1 regex (NW-/CUST-) → v2 LLM classifier (KB/TOOL/BOTH). Removes ID-pattern brittleness; classifies by intent, scales to new tables without new regex. Tools always-on regardless of route (graceful misroute). 6/6.
 - Multimodal intake — image + PDF via load_file_block (base64; image→"image", PDF→"document", ext-driven media_type, raises on unsupported). Optional file_path param, text callers unaffected. Verified live (PNG + PDF).
 - Orchestration chain (verify node) — classify → generate_answer (tool loop, extracted fn) → verify (grounding gate: judges answer vs real KB context + tool results, returns verdict+reason) → retry-with-reason (max 2, reason injected) → safe fallback. Untangled nested tool/retry loops via extraction. 6/6; caught real UnboundLocalError during refactor.
-- Prompt caching — cache_control ephemeral (5-min) on stable system block; system refactored to block list (stable prefix first, variable context/retry after breakpoint). Verified empirically: inert below ~1024-token threshold (created=0/read=0), fires once realistic (created=1038 / read=1038 on repeat). Hardened system prompt in process. Cost model: 1.25x write (5m) / 2x (1h) / 0.1x reads; break-even 1 read (5m) / 2 (1h). Cost lever first, latency second, input-side only.
-- Customer ID normalization — normalize_id extracts digits + zero-pads ("cust-1" → CUST-001) so users needn't type exact IDs. Applied to customer IDs only (order IDs are full 5-digit, typed exactly — normalizing them would be wrong).
+- Prompt caching — cache_control ephemeral (5-min) on stable system block; system refactored to block list (stable prefix first, variable context/retry after breakpoint). Verified empirically: inert below ~1024-token threshold, fires once realistic (created=1038 / read=1038). Cost model: 1.25x write (5m) / 2x (1h) / 0.1x reads. Cost lever first, latency second, input-side only.
+- Customer ID normalization — normalize_id extracts digits + zero-pads via zfill ("cust-1" → CUST-001). Customer IDs only (order IDs typed exactly — normalizing them would be wrong). Nested-format-spec bug caught by Claude Code review, fixed.
 - MCP — complete, all three primitives:
-  - Tools: order status + customer orders wrapped as FastMCP server (schema auto-generated from type hints + docstrings). Agent is the MCP client — core chain refactored async top-down (run_agent → generate_answer → tool_loop), session threaded through, tool calls go over stdio to server subprocess (call_tool → unwrap result.content[0].text). 6/6 evals through the MCP path — behavior identical to direct calls.
-  - Resources: KB article via kb:// URI. Exposed for cross-agent consumption / protocol completeness; agent itself uses RAG for retrieval, not resources.
-  - Prompts: 2 server-side templates, one parameterized (order_id auto-schema'd from function signature). Client discovers + invokes all three primitives (list_/call_/read_/get_).
+  - Tools: order status + customer orders wrapped as FastMCP server (schema auto-generated from type hints + docstrings). Agent is the MCP client — core chain refactored async top-down (run_agent → generate_answer → tool_loop), session threaded through, tool calls over stdio (call_tool → unwrap result.content[0].text). 6/6 evals through the MCP path.
+  - Resources: KB article via kb:// URI. Exposed for cross-agent consumption; agent itself uses RAG for retrieval.
+  - Prompts: 2 server-side templates, one parameterized (order_id auto-schema'd from function signature). Client exercises all primitives (list_/call_/read_/get_).
+- Streamlit demo UI (src/ui.py) — delegated to Claude Code (first Claude Code task — JD gap closed): chat w/ history, file upload → multimodal path, signal badges (route/verify/cache/tools/fallback), sidebar convo switcher on conversations.py, fresh MCP session per message. agent.py signals dict added (guarded, evals untouched). Run: `streamlit run src/ui.py`. Caveat: badges session-only.
+- LangGraph port (src/test_langgraph.py) — full chain re-implemented as a graph, FULL LangChain transport (deliberate: "if transporting, transport fully"):
+  - AgentState TypedDict (query/messages/route/context/answer/grounding/passed/reason/attempt) — loop state became graph state (attempt counter explicit).
+  - Nodes: classify, retrieve, generate (LangChain tool loop: bind_tools → response.tool_calls → ToolMessage(tool_call_id) round-trip), verify, fallback. Nodes return deltas only; nodes never call nodes — the graph wires them.
+  - Edges: entry classify → retrieve → generate → verify; conditional after_verify → END | generate (retry as BACKWARD EDGE — cycles are the loops) | fallback (attempt ≥ 2 guard). Retry reason injected into system prompt on regenerate.
+  - Provider swap demonstrated: ChatOpenAI → OpenRouter (base_url + OPENROUTER_API_KEY) → gpt-4o. Same .invoke() regardless of backend.
+  - Message choreography: System → Human → AI(tool_calls) → Tool → ... → AI(final). LangChain response.content IS the string (vs Anthropic content[0].text); invoke takes a LIST; no stop_reason — check response.tool_calls.
+  - Happy path verified end to end (refund query through full graph). Same agent now exists twice: hand-rolled (raw SDK) + framework (LangGraph) — the comparison artifact.
 
 ## Now
-- LangGraph port — re-implement the orchestration chain in LangGraph as a hand-rolled-vs-framework comparison. JD "AI orchestration frameworks" keyword. Deliverable: working port + short written take on when a framework earns its keep. Differentiator: built the machinery by hand first, so the port proves fundamentals AND framework fluency.
+- LangGraph wrap-up: tool-path validation through the graph (NW-10001), commit, then the written hand-rolled-vs-framework take (interview artifact: when the framework earns its keep).
 
 ## Next
-- Cleanup pass — dead code (classify regex, send_to_claude), duplicated extract_reply (agent.py + evals.py), debug prints ([route:]/[verify:]/[cache:]), split chat.py out of agent.py, activate_chat needs async+session update (broken since MCP refactor)
-- Langfuse — trace/observe runs, pass-rate over time (also JD "observability" keyword)
-- Reranking + top-k tuning — measured alternative to eyeballed threshold; tune both against eval suite (k=3/5/8)
-- Multi-agent contrast exercise — orchestrator + specialists, measured vs chain; document why chain wins
+- Cleanup pass — dead code (classify regex, send_to_claude, tool_loop/extract_reply imports in test_langgraph), duplicated extract_reply, debug prints, split chat.py, activate_chat broken since async refactor
+- Langfuse — trace/observe runs, pass-rate over time (JD "observability" keyword)
+- Reranking + top-k tuning — measured vs eyeballed; tune against eval suite (k=3/5/8)
+- Multi-agent contrast exercise — orchestrator + specialists as LangGraph subgraphs, measured vs chain; document why chain wins
 - Optional cloud deploy (closes K8s + cloud JD gaps)
 - Phase 5: README, demo script, 90s walkthrough
 
 ## Backlog
-- Vector DB / RAG scaling (JD "Vector Databases" — required) — current semantic search is hand-written O(n) cosine loop over vectors.json; breaks past a few thousand chunks. Fix: swap for vector DB + ANN (FAISS/pgvector/Pinecone), keep BM25 + RRF, add rerank. Do properly near end as dedicated scaling exercise; not needed for demo.
-- Expand eval coverage — multi-turn memory, tool disambiguation, retrieval failure, non-determinism (run N, average)
-- Attachment token optimization — downscale images (Pillow ~1000–1500px), text-PDF→text block (pdfplumber), send-once + cache prefix, summarize-and-drop. Principle: optimize encoding not content.
+- Vector DB / RAG scaling (JD "Vector Databases" — required) — O(n) cosine loop breaks past a few thousand chunks. Swap for vector DB + ANN (FAISS/pgvector/Pinecone), keep BM25 + RRF, add rerank. Near end.
+- Expand eval coverage — multi-turn, tool disambiguation, retrieval failure, non-determinism (run N, average); also point evals at the LangGraph app for apples-to-apples scoring
+- Attachment token optimization — downscale images, text-PDF→text, send-once + cache. Optimize encoding not content.
 - Data generator realism — partially fixed
-- [VOCABULARY — interview prep, not a build] Agent memory taxonomy mapped to Atlas: working/in-context (messages list — have), retrieval/external (RAG — have), semantic/persistent (conversations.py — partial), parametric (weights — nothing to build), episodic (past-run log — connects to verify logging), procedural (workflows — the chain IS this; MCP prompts = managed version), prospective (future intentions — niche, trading not support). Real engineering collapses to 3: in-context, retrieval, persistent state. Layer to the problem, don't build all 7.
+- [VOCABULARY — interview prep, not a build] Agent memory taxonomy mapped to Atlas: working/in-context (have), retrieval (have), semantic/persistent (partial), parametric (n/a), episodic (verify logging), procedural (the chain; MCP prompts = managed version), prospective (niche). Collapses to 3 buckets: in-context, retrieval, persistent state.
 
 ## Known limits (documented, not bugs)
-- Substring grading has a variance floor (LLM non-determinism flips pass/fail on identical case)
-- Threshold + stopwords + top-k eyeballed, never measured (reranking pass addresses)
-- Router binary at retrieval level; ID-bearing query that also needs KB may skip retrieval. Rare, accepted v1.
-- Attachments sent whole, one file/ticket assumed. Multi-file retrieval + resend-avoidance not built.
+- Substring grading variance floor (LLM non-determinism)
+- Threshold + stopwords + top-k eyeballed (reranking pass addresses)
+- Router binary at retrieval level (rare miss, accepted v1)
+- Attachments sent whole, one file/ticket
+- LangGraph port: fresh messages built per generate (multi-turn history not threaded into graph runs yet); evals not yet pointed at the graph version
 
-## Target-role gap check (from real JD: "Gen AI Engineer - AZ", Jul 2026)
-HAVE: Python (via build) · GenAI/LLMs (Anthropic) · RAG/semantic search · Agentic AI + orchestration (chain) · MCP (done, JD-named) · API/microservices (Salesforce/MuleSoft) · SDLC/CI-CD (Copado) · Docker · FinTech (bank via Infosys)
-GAP: AI orchestration frameworks (LangGraph — building now) · Observability (Langfuse — next) · Kubernetes/Cloud (optional deploy closes both) · Claude Code (one small task before applying)
-Screening signal: "technically strong profiles only" + mandatory live technical screen → validates the build-not-tutorial thesis.
+
+## Target-role gap check (JD: "Gen AI Engineer - AZ", Jul 2026)
+HAVE: Python (via build) · GenAI/LLMs (Anthropic + OpenAI via OpenRouter) · RAG/semantic search · Agentic AI + orchestration (hand-rolled chain AND LangGraph) · MCP (done, JD-named) · Orchestration frameworks (LangGraph — done, pending writeup) · API/microservices · SDLC/CI-CD · Docker · FinTech · Claude Code (first task done — UI delegation)
+GAP: Observability (Langfuse — next) · Kubernetes/Cloud (optional deploy)
+Screening signal: "technically strong profiles only" + live screen → validates build-not-tutorial thesis.
 
 ## [CONCEPTUAL LITERACY — read, don't build]
-Inference-layer awareness (vLLM, CUDA, quantization) — model-serving/infra lane, NOT FDE, NOT on target JDs. Value = vocabulary only (reason about latency/cost without building the runtime). Skim: serving engines (vLLM/TGI/llama.cpp/Ollama), KV cache + paged attention, quantization tradeoffs, perf metrics (TTFT/TPOT/throughput/tail latency). Guardrail: writing CUDA = drifted off-path. Closed by reading, not code.
+Inference-layer awareness (vLLM, CUDA, quantization) — infra lane, NOT FDE. Vocabulary only: serving engines, KV cache/paged attention, quantization tradeoffs, TTFT/TPOT/tail latency. Guardrail: writing CUDA = off-path.
+
+## [AUDIT]
+Audit DLAI Agentic-AI Module 5 (planning/multi-agent comms, free) before building multi-agent contrast — vocabulary + design patterns, ~1hr, no cert needed

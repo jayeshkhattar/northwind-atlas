@@ -124,5 +124,7 @@ if __name__ == "__main__":
     base = {"query":"", "messages":[], "route":"", "context":"", "answer":"",
                 "grounding":"", "passed":False, "reason":"", "attempt":0}
     app = build_graph()
-    result = app.invoke({**base, "query": "how long do refunds take"})
+#    result = app.invoke({**base, "query": "how long do refunds take"})
+
+    result = app.invoke({**base, "query": "status of NW-10001"})
     print(result["answer"])
