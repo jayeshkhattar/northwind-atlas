@@ -30,15 +30,23 @@ Project: Northwind support/ops agent. Learning mode (I write code, Claude review
   - KB and tool paths both verified end to end through the compiled graph. Same agent now exists twice: hand-rolled (raw SDK) + framework (LangGraph) — the comparison artifact.
 - Hand-rolled-vs-LangGraph comparison (interview artifact) — written short take on when a framework earns its keep. Thesis from the port: (1) separation — hand-rolled tangled everything in one method, the graph forces node boundaries; (2) modularity — reusable nodes, rewired edges, multiple graphs from shared parts; (3) isolation — retry lives in one edge function, changeable without touching generate/verify. Honest limit: the tool loop stayed imperative inside a node, and a 5-node linear chain barely exercises the graph — framework earns its keep when composing/modifying many graphs, overhead for one fixed chain.
 - Langfuse (observability — JD keyword gap CLOSED) — CallbackHandler on the compiled graph (config callbacks), both KB and tool paths traced live in cloud dashboard. Nested spans per node, per-call generations with tokens/cost. user_id + session_id tags (Users tab grouping). `grounded` score written from verify (1/0) → pass-rate over time. Verified: traces, cost, user/session, score=1.00 all visible.
-- Phase 5 polish: README + pipeline SVG DONE. Left: demo script, 90s walkthrough. Then applications start.
+- Phase 5 polish: README + pipeline SVG DONE. Left: demo script, 90s walkthrough.
+- Docker + Kubernetes deploy (K8s JD keyword gap CLOSED) — Atlas containerized and running on a local single-node cluster (minikube, docker driver, Mac M-series). Enterprise-shaped, same objects as a managed cluster:
+  - Dockerfile — multi-stage-style, pinned python:3.12-slim, non-root appuser, requirements before code (layer-cache win), mkdir+chown of runtime data dirs before USER switch, EXPOSE 8501, streamlit CMD with --server.address=0.0.0.0. Image built + loaded into minikube.
+  - Manifests (k8s/): Namespace atlas; Secret atlas-secrets created from .env (--from-env-file, never committed); Deployment (replicas 1, imagePullPolicy Never, envFrom secretRef, resource requests+limits, liveness+readiness probes on /_stcore/health); Service (ClusterIP, port 80 → targetPort 8501, label selector app: atlas). Reached via `minikube service atlas -n atlas`.
+  - Rolling update verified (new pod Ready before old terminates — zero downtime). Non-root write bug fixed (PermissionError on data/conversations — dirs created at runtime as root; fixed via build-time mkdir+chown).
+  - Debug lesson (real): a stale `image: atlas:v1` in deployment.yaml meant rebuilds never reached the cluster — every ownership check was hitting the original image. Root cause found via `kubectl get pod -o jsonpath={...image}`. Lesson: the running pod's image tag is the source of truth; check it first when a change "doesn't take". Fixed by bumping tag (v1→v3).
+  - Known limit: data written inside the container is ephemeral (no PersistentVolume) — acceptable for demo; real fix is a PVC.
+- Pushed to GitHub (origin/master) — Docker + k8s manifests + DEPLOY.md runbook committed. .gitignore extended (data/conversations/*); verified .env untracked before push.
 
 ## Now
-- Multi-agent contrast exercise — orchestrator + specialists as LangGraph subgraphs, measured vs chain; document why chain wins
+- Demo script + 90s walkthrough (last polish). Then applications start.
 
 ## Next
+- Multi-agent contrast exercise — orchestrator + specialists as LangGraph subgraphs, measured vs chain; document why chain wins (audit DLAI Agentic-AI Module 5 first)
 - Cleanup pass — dead code (classify regex, send_to_claude, tool_loop/extract_reply imports in langgraph_agent), duplicated extract_reply, debug prints, split chat.py, activate_chat broken since async refactor
 - Reranking + top-k tuning — measured vs eyeballed; tune against eval suite (k=3/5/8)
-- Optional cloud deploy (closes K8s + cloud JD gaps)
+- Optional: CI/CD (GitHub Actions build → push GHCR → rollout); Ingress + TLS; deploy manifests to a managed cluster for a public URL
 
 ## Backlog
 - Vector DB / RAG scaling (JD "Vector Databases" — required) — O(n) cosine loop breaks past a few thousand chunks. Swap for vector DB + ANN (FAISS/pgvector/Pinecone), keep BM25 + RRF, add rerank. Near end.
@@ -53,11 +61,12 @@ Project: Northwind support/ops agent. Learning mode (I write code, Claude review
 - Router binary at retrieval level (rare miss, accepted v1)
 - Attachments sent whole, one file/ticket
 - LangGraph port: fresh messages built per generate (multi-turn history not threaded into graph runs yet); evals not yet pointed at the graph version
+- K8s deploy: container writes are ephemeral (no PVC); single-node local cluster (no managed control plane, multi-node scheduling, public TLS/DNS, or CI/CD-to-cluster yet)
 
 
 ## Target-role gap check (JD: "Gen AI Engineer - AZ", Jul 2026)
-HAVE: Python (via build) · GenAI/LLMs (Anthropic + OpenAI via OpenRouter) · RAG/semantic search · Agentic AI + orchestration (hand-rolled chain AND LangGraph) · MCP (done, JD-named) · Orchestration frameworks (LangGraph — done + writeup) · Observability (Langfuse — done, JD-named) · API/microservices · SDLC/CI-CD · Docker · FinTech · Claude Code (first task done — UI delegation)
-GAP: Kubernetes/Cloud (optional deploy)
+HAVE: Python (via build) · GenAI/LLMs (Anthropic + OpenAI via OpenRouter) · RAG/semantic search · Agentic AI + orchestration (hand-rolled chain AND LangGraph) · MCP (done, JD-named) · Orchestration frameworks (LangGraph — done + writeup) · Observability (Langfuse — done, JD-named) · API/microservices · SDLC/CI-CD · Docker · Kubernetes (local deploy — done, JD-named) · FinTech · Claude Code (first task done — UI delegation)
+GAP: none blocking. Optional depth: managed-cloud K8s + CI/CD-to-cluster, Vector DB.
 Screening signal: "technically strong profiles only" + live screen → validates build-not-tutorial thesis.
 
 ## [CONCEPTUAL LITERACY — read, don't build]
