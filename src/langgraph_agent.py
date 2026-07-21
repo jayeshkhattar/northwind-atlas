@@ -7,11 +7,15 @@ from langchain_openai import ChatOpenAI
 from typing import TypedDict
 from .agent import SYSTEM_PROMPT, build_context, tool_loop, extract_reply
 from .tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
+from langfuse.langchain import CallbackHandler
+from langfuse import get_client
 
 TOOL_FUNCTIONS = {
     "get_order_status": get_order_status,
     "get_customer_orders":get_customer_orders,
 }
+
+handler = CallbackHandler()
 
 cl_model_name = "claude-haiku-4-5"
 op_model_name = 'openai/gpt-4o'
@@ -91,6 +95,7 @@ def verify(state: AgentState) -> dict:
     passed = response.content.strip().upper().startswith("PASS")
     reason = "" if passed else response.content
     attempt = state["attempt"]
+    get_client().score_current_trace(name="grounded", value=1 if passed else 0)
     if passed == False:
         attempt += 1 
     return {"passed":passed, "reason":reason, "attempt": attempt}
@@ -125,6 +130,7 @@ if __name__ == "__main__":
                 "grounding":"", "passed":False, "reason":"", "attempt":0}
     app = build_graph()
 #    result = app.invoke({**base, "query": "how long do refunds take"})
-
-    result = app.invoke({**base, "query": "status of NW-10001"})
+#status of NW-10001
+    config_data={"callbacks": [handler], "metadata": {"langfuse_user_id": "j-test", "langfuse_session_id": "session-1"}}
+    result = app.invoke({**base, "query": "how long do refunds take"}, config=config_data)
     print(result["answer"])

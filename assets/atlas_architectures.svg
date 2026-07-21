@@ -1,0 +1,121 @@
+<svg viewBox="0 0 960 1080" xmlns="http://www.w3.org/2000/svg" font-family="ui-sans-serif, system-ui, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <text x="480" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Three architectures for Atlas — same problem, different control</text>
+  <text x="480" y="56" text-anchor="middle" font-size="13" fill="#64748b">Ticket in → resolution out. What differs: WHO decides the steps.</text>
+
+  <!-- ============ 1. DETERMINISTIC CHAIN ============ -->
+  <rect x="30" y="80" width="900" height="250" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="50" y="108" font-size="16" font-weight="700" fill="#14532d">1 · Deterministic chain (workflow)</text>
+  <text x="50" y="128" font-size="12" fill="#166534">YOU hardcode the steps. LLM fills each. Fixed path, testable, reliable. ← build this first</text>
+
+  <!-- chain nodes -->
+  <g>
+    <rect x="50" y="150" width="130" height="60" rx="8" fill="#ffffff" stroke="#86efac"/>
+    <text x="115" y="176" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">classify</text>
+    <text x="115" y="194" text-anchor="middle" font-size="10" fill="#64748b">KB/TOOL/BOTH</text>
+
+    <line x1="180" y1="180" x2="215" y2="180" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+    <rect x="217" y="150" width="130" height="60" rx="8" fill="#ffffff" stroke="#86efac"/>
+    <text x="282" y="176" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">resolve</text>
+    <text x="282" y="194" text-anchor="middle" font-size="10" fill="#64748b">run_agent (today)</text>
+
+    <line x1="347" y1="180" x2="382" y2="180" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+    <rect x="384" y="150" width="130" height="60" rx="8" fill="#ffffff" stroke="#86efac"/>
+    <text x="449" y="176" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">verify</text>
+    <text x="449" y="194" text-anchor="middle" font-size="10" fill="#64748b">grounded? no lies?</text>
+
+    <line x1="514" y1="180" x2="549" y2="180" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+    <rect x="551" y="150" width="130" height="60" rx="8" fill="#ffffff" stroke="#86efac"/>
+    <text x="616" y="176" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">format</text>
+    <text x="616" y="194" text-anchor="middle" font-size="10" fill="#64748b">final reply</text>
+
+    <line x1="681" y1="180" x2="716" y2="180" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+    <rect x="718" y="150" width="120" height="60" rx="8" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="778" y="184" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">→ customer</text>
+  </g>
+
+  <text x="50" y="245" font-size="12" fill="#166534" font-weight="600">Control:</text>
+  <text x="115" y="245" font-size="12" fill="#334155">code owns the order. Each arrow is a Python line, not a model decision.</text>
+  <text x="50" y="268" font-size="12" fill="#166534" font-weight="600">Use when:</text>
+  <text x="130" y="268" font-size="12" fill="#334155">the steps are known in advance (they are, for a support ticket).</text>
+  <text x="50" y="291" font-size="12" fill="#166534" font-weight="600">Reframe:</text>
+  <text x="122" y="291" font-size="12" fill="#334155">your current run_agent stops being the whole system — it becomes ONE node ("resolve").</text>
+  <text x="50" y="314" font-size="12" fill="#166534" font-weight="600">Curriculum:</text>
+  <text x="135" y="314" font-size="12" fill="#334155">chaining workflow · workflow-vs-agent distinction.</text>
+
+  <!-- ============ 2. AGENTIC LOOP ============ -->
+  <rect x="30" y="350" width="900" height="290" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="50" y="378" font-size="16" font-weight="700" fill="#1e3a8a">2 · Agentic loop (model plans)</text>
+  <text x="50" y="398" font-size="12" fill="#1d4ed8">THE MODEL decides the steps at runtime. You give a goal + tools; it loops until it decides it's done.</text>
+
+  <!-- loop diagram -->
+  <rect x="120" y="420" width="150" height="60" rx="8" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="195" y="446" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">goal + tools</text>
+  <text x="195" y="464" text-anchor="middle" font-size="10" fill="#64748b">"resolve this ticket"</text>
+
+  <line x1="270" y1="450" x2="330" y2="450" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+  <rect x="332" y="420" width="180" height="130" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="422" y="446" text-anchor="middle" font-size="12" font-weight="700" fill="#1e3a8a">model plans next step</text>
+  <text x="422" y="468" text-anchor="middle" font-size="11" fill="#1e40af">think → act (tool) →</text>
+  <text x="422" y="484" text-anchor="middle" font-size="11" fill="#1e40af">observe result →</text>
+  <text x="422" y="500" text-anchor="middle" font-size="11" fill="#1e40af">decide: done or loop?</text>
+  <text x="422" y="524" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">this is your while-loop,</text>
+  <text x="422" y="538" text-anchor="middle" font-size="10" fill="#64748b" font-style="italic">but with a real plan+stop</text>
+
+  <!-- loop back arrow -->
+  <path d="M 422 550 Q 422 590 350 590 Q 250 590 250 500 L 250 480" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <text x="300" y="608" text-anchor="middle" font-size="11" fill="#2563eb" font-weight="600">loop while not done</text>
+
+  <line x1="512" y1="450" x2="572" y2="450" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+  <rect x="574" y="420" width="130" height="60" rx="8" fill="#bfdbfe" stroke="#2563eb"/>
+  <text x="639" y="454" text-anchor="middle" font-size="12" font-weight="700" fill="#1e3a8a">→ answer</text>
+
+  <text x="50" y="632" font-size="12" fill="#1d4ed8" font-weight="600">Use when:</text>
+  <text x="130" y="632" font-size="12" fill="#334155">the path CAN'T be predicted — open-ended tasks. For fixed support tickets, this is often more than you need.</text>
+
+  <!-- ============ 3. MULTI-AGENT ============ -->
+  <rect x="30" y="660" width="900" height="330" rx="12" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="50" y="688" font-size="16" font-weight="700" fill="#7f1d1d">3 · Multi-agent (orchestrator + specialists)</text>
+  <text x="50" y="708" font-size="12" fill="#b91c1c">Multiple LLM instances, distinct roles. Impressive — and usually overkill. Build a minimal one to SHOW you know when NOT to.</text>
+
+  <!-- orchestrator -->
+  <rect x="385" y="730" width="190" height="55" rx="8" fill="#fee2e2" stroke="#dc2626"/>
+  <text x="480" y="753" text-anchor="middle" font-size="12" font-weight="700" fill="#7f1d1d">orchestrator (triage)</text>
+  <text x="480" y="770" text-anchor="middle" font-size="10" fill="#991b1b">delegates + synthesizes</text>
+
+  <!-- three specialists -->
+  <line x1="440" y1="785" x2="250" y2="835" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="480" y1="785" x2="480" y2="835" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+  <line x1="520" y1="785" x2="710" y2="835" stroke="#475569" stroke-width="2" marker-end="url(#ar)"/>
+
+  <rect x="150" y="838" width="180" height="70" rx="8" fill="#ffffff" stroke="#fca5a5"/>
+  <text x="240" y="864" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">refund agent</text>
+  <text x="240" y="882" text-anchor="middle" font-size="10" fill="#64748b">own prompt + tools</text>
+
+  <rect x="390" y="838" width="180" height="70" rx="8" fill="#ffffff" stroke="#fca5a5"/>
+  <text x="480" y="864" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">tech-support agent</text>
+  <text x="480" y="882" text-anchor="middle" font-size="10" fill="#64748b">own prompt + tools</text>
+
+  <rect x="630" y="838" width="180" height="70" rx="8" fill="#ffffff" stroke="#fca5a5"/>
+  <text x="720" y="864" text-anchor="middle" font-size="12" font-weight="600" fill="#0f172a">escalation agent</text>
+  <text x="720" y="882" text-anchor="middle" font-size="10" fill="#64748b">own prompt + tools</text>
+
+  <text x="50" y="945" font-size="12" fill="#b91c1c" font-weight="600">Use when:</text>
+  <text x="130" y="945" font-size="12" fill="#334155">genuinely separable domains with conflicting context/tools. Rare. Cost + latency + debugging all multiply.</text>
+  <text x="50" y="968" font-size="12" fill="#b91c1c" font-weight="600">The insight:</text>
+  <text x="138" y="968" font-size="12" fill="#334155">"I built it, measured it against the chain, and the chain won — here's why" is the hire-worthy sentence.</text>
+
+  <!-- footer -->
+  <text x="480" y="1020" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">The FDE skill isn't building #3. It's knowing that #1 solves most problems — and proving you can tell the difference.</text>
+  <text x="480" y="1044" text-anchor="middle" font-size="12" fill="#64748b">Build order: chain (foundation) → deepen the agentic loop → minimal multi-agent as a contrast exercise. Evals gate each.</text>
+</svg>

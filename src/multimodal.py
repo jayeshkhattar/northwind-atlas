@@ -27,5 +27,3 @@ def load_file_block(path):
         }
     }
     return result
-
-#create_image_block = load_image_block("src/creature.jpg")

@@ -2,3 +2,6 @@ anthropic==0.112.0
 python-dotenv==1.2.2
 mcp[cli]==1.28.1
 streamlit==1.41.1
+rank-bm25==0.2.2
+numpy==2.5.0
+voyageai==0.4.1

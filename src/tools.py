@@ -1,4 +1,5 @@
 import json
+import re
 
 GET_ORDER_STATUS_SCHEMA = {
     "name": "get_order_status",
@@ -33,20 +34,30 @@ GET_CUSTOMER_ORDERS_SCHEMA = {
 with open("data/orders.json") as f:
     ORDERS = json.load(f)
 
-def get_customer_orders(customer_id):
-        customer_dict = []
-        for order in ORDERS:
-            if order["customer_id"] == customer_id:
-                customer_dict.append(order)
-        if not customer_dict:
-            return {"message" : f"No order found for customer with id {customer_id}"}
-        return customer_dict
+def get_customer_orders(customer_id: str) -> dict:
+    order_id = normalize_id(customer_id, "CUST", 3)
+    """retrieve all orders belonging to a customer with customer ID(For eg, for  CUST-001, get me list and details of order ids NW-10024 and NW-10043)."""
+    customer_dict = []
+    for order in ORDERS:
+        if order["customer_id"] == customer_id:
+            customer_dict.append(order)
+    if not customer_dict:
+        return {"message" : f"No order found for customer with id {customer_id}"}
+    return customer_dict
 
-def get_order_status(order_id):
+def get_order_status(order_id: str) -> dict:
+    """Look up the current status and details of a customer's order (For eg, for  NW-10001)."""
     for order in ORDERS:
         if order_id == order["order_id"]:
             return order
     return {"error": f"No order found with id {order_id}"}
+
+def normalize_id(raw: str, prefix: str, width: int) -> str:
+    digits = re.search(r"\d+", raw)
+    if not digits:
+        return raw
+    return f"{prefix}-{int(digits.group()):0{width}{digits}d}"
+
 
 # print(get_order_status("NW-10001"))
 # print(get_order_status("NW-10301"))
