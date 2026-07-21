@@ -30,14 +30,14 @@ Project: Northwind support/ops agent. Learning mode (I write code, Claude review
   - KB and tool paths both verified end to end through the compiled graph. Same agent now exists twice: hand-rolled (raw SDK) + framework (LangGraph) — the comparison artifact.
 - Hand-rolled-vs-LangGraph comparison (interview artifact) — written short take on when a framework earns its keep. Thesis from the port: (1) separation — hand-rolled tangled everything in one method, the graph forces node boundaries; (2) modularity — reusable nodes, rewired edges, multiple graphs from shared parts; (3) isolation — retry lives in one edge function, changeable without touching generate/verify. Honest limit: the tool loop stayed imperative inside a node, and a 5-node linear chain barely exercises the graph — framework earns its keep when composing/modifying many graphs, overhead for one fixed chain.
 - Langfuse (observability — JD keyword gap CLOSED) — CallbackHandler on the compiled graph (config callbacks), both KB and tool paths traced live in cloud dashboard. Nested spans per node, per-call generations with tokens/cost. user_id + session_id tags (Users tab grouping). `grounded` score written from verify (1/0) → pass-rate over time. Verified: traces, cost, user/session, score=1.00 all visible.
+- Phase 5 polish: README + pipeline SVG DONE. Left: demo script, 90s walkthrough. Then applications start.
 
 ## Now
-- Phase 5 polish: README + pipeline SVG DONE. Left: demo script, 90s walkthrough. Then applications start.
+- Multi-agent contrast exercise — orchestrator + specialists as LangGraph subgraphs, measured vs chain; document why chain wins
 
 ## Next
 - Cleanup pass — dead code (classify regex, send_to_claude, tool_loop/extract_reply imports in langgraph_agent), duplicated extract_reply, debug prints, split chat.py, activate_chat broken since async refactor
 - Reranking + top-k tuning — measured vs eyeballed; tune against eval suite (k=3/5/8)
-- Multi-agent contrast exercise — orchestrator + specialists as LangGraph subgraphs, measured vs chain; document why chain wins
 - Optional cloud deploy (closes K8s + cloud JD gaps)
 
 ## Backlog
