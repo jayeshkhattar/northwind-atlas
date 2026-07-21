@@ -109,9 +109,16 @@ def classify_llm(query):
         )
     return msg.content[0].text.strip().upper()
 
-async def run_agent(session, messages, query, file_path=None):
+async def run_agent(session, messages, query, file_path=None, signals=None):
 
     route = classify_llm(query)
+    print(f"[route: {route}]")
+    if signals is not None:
+        signals["route"] = route
+        signals["verify"] = []
+        signals["tools"] = []
+        signals["cache"] = {"created": 0, "read": 0}
+        signals["fallback"] = False
     context = build_context(query) if route in ("KB", "BOTH") else ""
     system = [
         {
@@ -139,19 +146,23 @@ async def run_agent(session, messages, query, file_path=None):
     for attempt in range(max_attempts):
         if attempt > 0:
             system.append({"type": "text", "text": f"\nPrevious answer failed grounding: {reason}. State only facts in the context."})
-        answer, messages, tool_outputs = await generate_answer(session, system, TOOLS, messages)
+        answer, messages, tool_outputs = await generate_answer(session, system, TOOLS, messages, signals)
         grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
         passed, reason = verify(query, grounding, answer)
-        #print(f"[verify attempt {attempt+1}: {passed}]")        
+        print(f"[verify attempt {attempt+1}: {passed}]")
+        if signals is not None:
+            signals["verify"].append({"attempt": attempt + 1, "passed": passed, "reason": reason})
         if passed:
             return messages
-    fallback = """I'm not able to confirm this from our information. 
+    if signals is not None:
+        signals["fallback"] = True
+    fallback = """I'm not able to confirm this from our information.
     Let me escalate you to a human agent who can help."""
     messages.append({"role": "assistant", "content": [{"type": "text", "text": fallback}]})
     return messages
 
 
-async def generate_answer(session, system, TOOLS, messages):
+async def generate_answer(session, system, TOOLS, messages, signals=None):
     tool_outputs = []
     while True:
         msg = client.messages.create(
@@ -161,17 +172,21 @@ async def generate_answer(session, system, TOOLS, messages):
             tools=TOOLS,
             messages=messages,
         )
-        print(f"""[cache: created={msg.usage.cache_creation_input_tokens}, 
-              read={msg.usage.cache_read_input_tokens}]""")
+        created = msg.usage.cache_creation_input_tokens or 0
+        read = msg.usage.cache_read_input_tokens or 0
+        print(f"[cache: created={created}, read={read}]")
+        if signals is not None:
+            signals["cache"]["created"] += created
+            signals["cache"]["read"] += read
 
         messages.append({"role": "assistant", "content": [b.model_dump() for b in msg.content]})
         if msg.stop_reason == 'tool_use':
-            messages, tool_outputs = await tool_loop(session, msg, tool_outputs, messages)
+            messages, tool_outputs = await tool_loop(session, msg, tool_outputs, messages, signals)
         else:
             answer = extract_reply(messages)
             return answer, messages, tool_outputs
 
-async def tool_loop(session, msg, tool_outputs, messages):
+async def tool_loop(session, msg, tool_outputs, messages, signals=None):
 
     tool_result = None
     for block in msg.content:
@@ -182,6 +197,8 @@ async def tool_loop(session, msg, tool_outputs, messages):
 
     #search for tool_name
     if tool_name in TOOL_FUNCTIONS:
+        if signals is not None:
+            signals["tools"].append(tool_name)
         fn = TOOL_FUNCTIONS[tool_name]
         #tool_result = fn(**tool_input)
         tool_result = []
