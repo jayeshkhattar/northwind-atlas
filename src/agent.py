@@ -6,6 +6,7 @@ from .search import multi_index_search_score
 from .tools import get_order_status, get_customer_orders, GET_ORDER_STATUS_SCHEMA, GET_CUSTOMER_ORDERS_SCHEMA
 from .conversations import load_conversation, save_conversation, display_conversation, next_convo_id
 from .multimodal import load_file_block
+from .tracing import init_tracing, span, llm_span, record_llm_response, set_attrs
 
 TOOL_FUNCTIONS = {
     "get_order_status": get_order_status,
@@ -15,6 +16,7 @@ TOOL_FUNCTIONS = {
 model_name = "claude-haiku-4-5"
 
 load_dotenv()
+init_tracing()
 client = anthropic.Anthropic()
 
 chunks = load_kb()
@@ -102,17 +104,32 @@ def classify_llm(query):
     - TOOL: needs live order status or customer account data
     - BOTH: needs docs AND live data
     Reply with exactly one word. Do not explain."""
-    msg = client.messages.create(
-            model=model_name,
-            max_tokens=10,
-            messages=[{"role":"user", "content":message}],
-        )
-    return msg.content[0].text.strip().upper()
+    with llm_span("classify", model_name, 10) as s:
+        msg = client.messages.create(
+                model=model_name,
+                max_tokens=10,
+                messages=[{"role":"user", "content":message}],
+            )
+        record_llm_response(s, msg)
+        route = msg.content[0].text.strip().upper()
+        s.set_attribute("atlas.route", route)
+    return route
 
-async def run_agent(session, messages, query, file_path=None, signals=None):
+async def run_agent(session, messages, query, file_path=None, signals=None, conversation_id=None):
+    with span("atlas.turn", kind="agent", **{
+        "langfuse.session.id": None if conversation_id is None else str(conversation_id),
+        "atlas.query": query,
+        "atlas.history_len": len(messages),
+        "atlas.attachment": file_path,
+    }) as turn:
+        return await _run_agent(session, messages, query, file_path, signals, turn)
+
+
+async def _run_agent(session, messages, query, file_path, signals, turn):
 
     route = classify_llm(query)
     print(f"[route: {route}]")
+    turn.set_attribute("atlas.route", route)
     if signals is not None:
         signals["route"] = route
         signals["verify"] = []
@@ -148,16 +165,20 @@ async def run_agent(session, messages, query, file_path=None, signals=None):
             system.append({"type": "text", "text": f"\nPrevious answer failed grounding: {reason}. State only facts in the context."})
         answer, messages, tool_outputs = await generate_answer(session, system, TOOLS, messages, signals)
         grounding = f"KB Context:\n{context}\nTOOL RESULT:\n{chr(10).join(tool_outputs)}"
-        passed, reason = verify(query, grounding, answer)
+        with span("verify.gate", kind="guardrail", **{"verify.attempt": attempt + 1, "verify.max_attempts": max_attempts}) as gate:
+            passed, reason = verify(query, grounding, answer)
+            set_attrs(gate, **{"verify.verdict": "PASS" if passed else "FAIL", "verify.reason": reason or None})
         print(f"[verify attempt {attempt+1}: {passed}]")
         if signals is not None:
             signals["verify"].append({"attempt": attempt + 1, "passed": passed, "reason": reason})
         if passed:
+            set_attrs(turn, **{"verify.attempts": attempt + 1, "atlas.escalated": False, "atlas.answer": answer})
             return messages
     if signals is not None:
         signals["fallback"] = True
     fallback = """I'm not able to confirm this from our information.
     Let me escalate you to a human agent who can help."""
+    set_attrs(turn, **{"verify.attempts": max_attempts, "atlas.escalated": True, "atlas.answer": fallback})
     messages.append({"role": "assistant", "content": [{"type": "text", "text": fallback}]})
     return messages
 
@@ -165,13 +186,15 @@ async def run_agent(session, messages, query, file_path=None, signals=None):
 async def generate_answer(session, system, TOOLS, messages, signals=None):
     tool_outputs = []
     while True:
-        msg = client.messages.create(
-            model=model_name,
-            max_tokens=300,
-            system=system,
-            tools=TOOLS,
-            messages=messages,
-        )
+        with llm_span("generate", model_name, 300) as s:
+            msg = client.messages.create(
+                model=model_name,
+                max_tokens=300,
+                system=system,
+                tools=TOOLS,
+                messages=messages,
+            )
+            record_llm_response(s, msg)
         created = msg.usage.cache_creation_input_tokens or 0
         read = msg.usage.cache_read_input_tokens or 0
         print(f"[cache: created={created}, read={read}]")
@@ -202,9 +225,14 @@ async def tool_loop(session, msg, tool_outputs, messages, signals=None):
         fn = TOOL_FUNCTIONS[tool_name]
         #tool_result = fn(**tool_input)
         tool_result = []
-        result = await session.call_tool(tool_name, tool_input)
-        for content in result.content:
-            tool_result.append(content.text)
+        with span(f"tool.{tool_name}", kind="tool", **{"tool.name": tool_name, "tool.input": tool_input, "tool.use_id": tool_id}) as s:
+            result = await session.call_tool(tool_name, tool_input)
+            for content in result.content:
+                tool_result.append(content.text)
+            set_attrs(s, **{
+                "tool.output_bytes": len(str(tool_result).encode()),
+                "tool.is_error": bool(getattr(result, "isError", False)),
+            })
         tool_outputs.append(str(tool_result))
 
     messages.append({
@@ -234,11 +262,13 @@ def verify(query, grounding, answer):
     - Grounding: {grounding}
     - Answer: {answer}
     Reply PASS if grounded. If not, reply FAIL: <one-line reason>."""
-    msg = client.messages.create(
-            model=model_name,
-            max_tokens=100,
-            messages=[{"role":"user", "content":message}],
-        )
+    with llm_span("verify", model_name, 100) as s:
+        msg = client.messages.create(
+                model=model_name,
+                max_tokens=100,
+                messages=[{"role":"user", "content":message}],
+            )
+        record_llm_response(s, msg)
     text = msg.content[0].text.strip()
     passed = text.upper().startswith("PASS")
     reason = "" if passed else text

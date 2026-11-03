@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import numpy as np
 
 from src.retrieval import load_kb
+from src.tracing import span, set_attrs
 
 load_dotenv()
 vo = voyageai.Client()
@@ -30,13 +31,15 @@ def get_vectors(chunks):
 
 
 def semantic_search(query, chunks, vectors, k=5):
-    query_vec = vo.embed([query], model="voyage-3.5-lite").embeddings[0]
+    with span("embedding.query", kind="embedding", **{"embedding.model": "voyage-3.5-lite"}) as s:
+        query_vec = vo.embed([query], model="voyage-3.5-lite").embeddings[0]
 
-    sims = np.dot(vectors, query_vec) / (
-        np.linalg.norm(vectors, axis=1) * np.linalg.norm(query_vec)
-    )
+        sims = np.dot(vectors, query_vec) / (
+            np.linalg.norm(vectors, axis=1) * np.linalg.norm(query_vec)
+        )
 
-    top_indexes = np.argsort(sims)[::-1][:k]
+        top_indexes = np.argsort(sims)[::-1][:k]
+        set_attrs(s, **{"embedding.top_scores": [round(float(sims[i]), 4) for i in top_indexes]})
     return [chunks[i] for i in top_indexes]
 
 

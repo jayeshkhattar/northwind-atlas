@@ -103,6 +103,14 @@ The MCP server exposes all three MCP primitives: **tools** (`get_order_status`,
 `get_customer_orders`), **resources** (`kb://` knowledge-base articles), and **prompts**
 (templated support inquiries).
 
+## Tracing
+
+Each turn is one OpenTelemetry trace with spans for the router call, retrieval (BM25 scores,
+semantic hits, fused RRF ranks), every model call (tokens, cache hits, latency), every MCP
+tool call (input, output size, errors) and each verification attempt (verdict, reason,
+escalation). Tracing is off by default. Set `ATLAS_TRACING=console`, `otlp` or `langfuse` to
+turn it on. See [docs/tracing.md](docs/tracing.md) for the span layout and a real trace.
+
 ## Project structure
 
 ```
