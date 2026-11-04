@@ -40,7 +40,6 @@ async def test_parallel_tool_calls_each_get_a_result(fake_llm, session):
     assert json.loads(results[1]["content"])["order_id"] == "NW-10002"
 
 
-@pytest.mark.xfail(strict=True, reason="bug: normalize_id has an invalid format spec")
 def test_customer_ids_are_normalized():
     from src.tools import get_customer_orders, normalize_id
     assert normalize_id("cust 1", "CUST", 3) == "CUST-001"

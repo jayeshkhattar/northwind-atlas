@@ -17,4 +17,3 @@ ignore = ["E501"]  # system prompts and test fixtures are long strings
 "src/agent.py" = ["F401", "F821", "F841"]
 "src/langgraph_agent.py" = ["F401", "E712"]
 "src/mcp_client.py" = ["F841"]
-"src/tools.py" = ["F841"]

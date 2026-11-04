@@ -73,7 +73,6 @@ async def test_unknown_order_is_a_result_not_an_exception(client):
     assert json.loads(result.content[0].text) == {"error": "No order found with id NW-99999"}
 
 
-@pytest.mark.xfail(strict=True, reason="bug: normalize_id has an invalid format spec")
 async def test_customer_orders_output_matches_order_schema(client):
     result = await client.call_tool("get_customer_orders", {"customer_id": "CUST-001"})
     assert not result.isError, result.content[0].text
