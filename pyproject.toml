@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = ["venv"]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501"]  # system prompts and test fixtures are long strings
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing findings, left for the cleanup pass in PROGRESS.md (this pass doesn't change agent code beyond tracing).
+"src/agent.py" = ["F401", "F821", "F841"]
+"src/langgraph_agent.py" = ["F401", "E712"]
+"src/mcp_client.py" = ["F841"]
+"src/tools.py" = ["F841"]
