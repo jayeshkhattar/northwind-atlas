@@ -87,7 +87,7 @@ To check the install without any API keys:
 ```bash
 pip install -r requirements-dev.txt
 make test    # unit tests, fully offline
-make evals   # replays the recorded eval run and prints the pass rate
+make evals   # replays the recorded eval run and prints the pass rate (once a run is recorded)
 ```
 
 ---
@@ -149,8 +149,8 @@ turn it on. See [docs/tracing.md](docs/tracing.md) for the span layout and a rea
 
 ## Evals, tests and standards
 
-- [EVALS.md](EVALS.md): the eval cases, how they're graded, the current pass rate and
-  latency from a real run, and a regression the harness caught.
+- [EVALS.md](EVALS.md): the eval cases and how they're graded. The pass rate and latency
+  go there from the first recorded run; none has been recorded yet.
 - [tests/](tests): offline unit tests for routing, retrieval, the verification gate, MCP
   tool schemas, context assembly and the tool loop. Writing them turned up three real bugs,
   each fixed in its own commit.

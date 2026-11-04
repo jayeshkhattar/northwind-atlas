@@ -29,7 +29,9 @@ jobs:
       # Replays recorded responses from evals/cassette.json: no API keys, no network.
       # Fails on a pass rate below the threshold, or on any request that isn't in the
       # cassette (a prompt, retrieval or tool change that hasn't been re-recorded).
+      # Skipped until the first real run has been recorded with `make evals-record`.
       - name: Evals (replay)
+        if: hashFiles('evals/cassette.json') != ''
         run: python -m src.evals --mode replay --threshold 0.8 --report evals/report.json
 
       - name: Upload eval report
