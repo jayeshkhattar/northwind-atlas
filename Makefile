@@ -21,4 +21,4 @@ evals-live:
 	$(PY) -m src.evals --mode live --report evals/report.json
 
 evals-record:
-	$(PY) -m src.evals --mode record --report evals/report.json
+	$(PY) -m src.evals --mode record --report evals/report.json --badge evals/badge.json

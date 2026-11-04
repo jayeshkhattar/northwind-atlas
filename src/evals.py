@@ -208,6 +208,7 @@ def main(argv=None):
     parser.add_argument("--report", help="write the JSON report here")
     parser.add_argument("--threshold", type=float, help="exit 1 if pass rate is below this (0-1)")
     parser.add_argument("--only", nargs="+", help="case ids to run")
+    parser.add_argument("--badge", help="write a shields.io endpoint JSON with the pass rate here")
     args = parser.parse_args(argv)
 
     if args.mode == "replay":
@@ -229,6 +230,12 @@ def main(argv=None):
     if args.report:
         Path(args.report).parent.mkdir(parents=True, exist_ok=True)
         Path(args.report).write_text(json.dumps(report, indent=2) + "\n")
+    if args.badge:
+        color = "brightgreen" if summary["pass_rate"] >= 0.9 else "yellow" if summary["pass_rate"] >= 0.75 else "red"
+        Path(args.badge).write_text(json.dumps({
+            "schemaVersion": 1, "label": "evals",
+            "message": f"{summary['passed']}/{summary['cases']} ({summary['pass_rate']:.0%})", "color": color,
+        }) + "\n")
     md = markdown(summary, results, args.threshold)
     print(md)
     if os.getenv("GITHUB_STEP_SUMMARY"):

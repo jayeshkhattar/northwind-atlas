@@ -1,5 +1,9 @@
 # Atlas — Northwind Support Agent
 
+[![ci](https://github.com/jayeshkhattar/northwind-atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/jayeshkhattar/northwind-atlas/actions/workflows/ci.yml)
+[![evals](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/jayeshkhattar/northwind-atlas/master/evals/badge.json)](EVALS.md)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A customer-support agent for a fictional D2C coffee-gear brand ("Northwind"). Atlas
 resolves tickets end to end: it answers from a knowledge base, calls real tools
 (order lookup, account history), reads uploaded screenshots and receipts, and

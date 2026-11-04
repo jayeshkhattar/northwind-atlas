@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check src tests scripts
+
+      - name: Tests
+        run: python -m pytest -q
+
+      # Replays recorded responses from evals/cassette.json: no API keys, no network.
+      # Fails on a pass rate below the threshold, or on any request that isn't in the
+      # cassette (a prompt, retrieval or tool change that hasn't been re-recorded).
+      - name: Evals (replay)
+        run: python -m src.evals --mode replay --threshold 0.8 --report evals/report.json
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: evals/report.json
+          if-no-files-found: ignore
