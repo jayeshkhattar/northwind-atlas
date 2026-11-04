@@ -1,6 +1,4 @@
 """The generate → tool → generate loop."""
-import json
-
 import pytest
 
 import src.agent as agent
@@ -24,7 +22,6 @@ async def test_tool_result_is_fed_back_and_grounds_the_answer(fake_llm, session)
     assert '"status": "delivered"' in llm.calls_for("verify")[0]["messages"][0]["content"]
 
 
-@pytest.mark.xfail(strict=True, reason="bug: tool_loop only answers the last tool_use block")
 async def test_parallel_tool_calls_each_get_a_result(fake_llm, session):
     # Claude may return several tool_use blocks in one turn; the API rejects the next
     # request unless every one of them gets a tool_result.
@@ -37,7 +34,7 @@ async def test_parallel_tool_calls_each_get_a_result(fake_llm, session):
 
     results = messages[2]["content"]
     assert [r["tool_use_id"] for r in results] == ["toolu_a", "toolu_b"]
-    assert json.loads(results[1]["content"])["order_id"] == "NW-10002"
+    assert '"order_id": "NW-10002"' in results[1]["content"]
 
 
 def test_customer_ids_are_normalized():

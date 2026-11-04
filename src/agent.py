@@ -211,34 +211,33 @@ async def generate_answer(session, system, TOOLS, messages, signals=None):
 
 async def tool_loop(session, msg, tool_outputs, messages, signals=None):
 
-    tool_result = None
+    # Claude can ask for several tools in one turn; each tool_use needs its own tool_result.
+    results = []
     for block in msg.content:
-        if block.type == 'tool_use':
-            tool_name = block.name
-            tool_input = block.input
-            tool_id = block.id    
+        if block.type != 'tool_use':
+            continue
+        tool_name = block.name
+        tool_input = block.input
+        tool_id = block.id
+        tool_result = None
 
-    #search for tool_name
-    if tool_name in TOOL_FUNCTIONS:
-        if signals is not None:
-            signals["tools"].append(tool_name)
-        fn = TOOL_FUNCTIONS[tool_name]
-        #tool_result = fn(**tool_input)
-        tool_result = []
-        with span(f"tool.{tool_name}", kind="tool", **{"tool.name": tool_name, "tool.input": tool_input, "tool.use_id": tool_id}) as s:
-            result = await session.call_tool(tool_name, tool_input)
-            for content in result.content:
-                tool_result.append(content.text)
-            set_attrs(s, **{
-                "tool.output_bytes": len(str(tool_result).encode()),
-                "tool.is_error": bool(getattr(result, "isError", False)),
-            })
-        tool_outputs.append(str(tool_result))
+        #search for tool_name
+        if tool_name in TOOL_FUNCTIONS:
+            if signals is not None:
+                signals["tools"].append(tool_name)
+            tool_result = []
+            with span(f"tool.{tool_name}", kind="tool", **{"tool.name": tool_name, "tool.input": tool_input, "tool.use_id": tool_id}) as s:
+                result = await session.call_tool(tool_name, tool_input)
+                for content in result.content:
+                    tool_result.append(content.text)
+                set_attrs(s, **{
+                    "tool.output_bytes": len(str(tool_result).encode()),
+                    "tool.is_error": bool(getattr(result, "isError", False)),
+                })
+            tool_outputs.append(str(tool_result))
+        results.append({"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)})
 
-    messages.append({
-        "role": "user",
-        "content": [{"type": "tool_result", "tool_use_id": tool_id, "content": str(tool_result)}],
-    })
+    messages.append({"role": "user", "content": results})
     return messages, tool_outputs
     
 def activate_chat(query, convo_id=-1):
