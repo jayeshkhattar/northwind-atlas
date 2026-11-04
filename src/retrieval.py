@@ -9,7 +9,8 @@ STOPWORDS = {"how", "do", "i", "get", "my", "the", "a", "an", "is", "to",
 
 def load_kb(kb_dir="data/kb"):
     chunks = []
-    for path in Path(kb_dir).glob("*.md"):
+    # sorted: data/vectors.json is a plain list aligned to this order, and glob order varies by filesystem
+    for path in sorted(Path(kb_dir).glob("*.md")):
         text = path.read_text()
         sections = text.split("## ")
         for section in sections[1:]:
