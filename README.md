@@ -44,7 +44,9 @@ of the same graph.
 |---|---|---|
 | **Streamlit UI** | `streamlit run src/ui.py` | Chat demo with file upload and live signal badges |
 | **CLI** | `python -m src.main` | One-shot agent run over an MCP session |
-| **Evals** | `python -m src.evals` | Run the graded test suite |
+| **Tests** | `make test` | 50 offline unit tests (no keys, under 2 s) |
+| **Evals** | `make evals` / `make evals-live` | Graded eval suite: replayed offline, or against the real API |
+| **Trace** | `python -m scripts.trace_dump "<query>"` | Print one turn's trace as a span tree |
 
 The Streamlit UI surfaces the agent's internal decisions per response as badges —
 **route** (KB/TOOL/BOTH), **verify** (pass/fail + attempt count), **cache** (tokens
@@ -77,10 +79,40 @@ Then try, in the UI:
 
 - `how long do refunds take?` — KB route, grounded from the docs
 - `what's the status of order NW-10001?` — TOOL route, live order lookup
-- attach `data/uploads/AMD-image.jpeg` and ask what's in it — multimodal path
+- attach any PNG/JPG screenshot or a PDF receipt and ask about it — multimodal path
 - `do refunds take 47 business days and require a blood sample?` — verify fails → escalation fallback
 
+To check the install without any API keys:
+
+```bash
+pip install -r requirements-dev.txt
+make test    # unit tests, fully offline
+make evals   # replays the recorded eval run and prints the pass rate
+```
+
 ---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U([Customer message]) --> R[Router<br/>classify_llm: KB / TOOL / BOTH]
+    R -->|KB, BOTH| RET[Hybrid retrieval<br/>BM25 + Voyage, RRF]
+    R -->|TOOL| CTX
+    RET --> CTX[Context assembly<br/>cached system prompt + top-3 chunks]
+    CTX --> LLM[Claude tool loop<br/>generate_answer]
+    LLM <-->|tool_use / tool_result| MCP[MCP server<br/>order + account tools]
+    LLM --> V{Verification gate<br/>grounded in context + tool output?}
+    V -->|FAIL, attempt 1| LLM
+    V -->|PASS| A([Answer])
+    V -->|FAIL, attempt 2| E([Human escalation])
+
+    subgraph OBS [Tracing: one OpenTelemetry trace per turn]
+      direction TB
+      T1[spans: router · retrieval · each LLM call · each tool call · each verify attempt]
+    end
+    LLM -.-> OBS
+```
 
 ## How it works
 
@@ -115,11 +147,50 @@ tool call (input, output size, errors) and each verification attempt (verdict, r
 escalation). Tracing is off by default. Set `ATLAS_TRACING=console`, `otlp` or `langfuse` to
 turn it on. See [docs/tracing.md](docs/tracing.md) for the span layout and a real trace.
 
+## Evals, tests and standards
+
+- [EVALS.md](EVALS.md): the eval cases, how they're graded, the current pass rate and
+  latency from a real run, and a regression the harness caught.
+- [tests/](tests): offline unit tests for routing, retrieval, the verification gate, MCP
+  tool schemas, context assembly and the tool loop. Writing them turned up three real bugs,
+  each fixed in its own commit.
+- [STANDARDS.md](STANDARDS.md): how to add a tool or an eval case, what has to pass before
+  merge, how prompts are versioned, and how to turn a production trace into a repro.
+
+## Design decisions
+
+**Raw SDK first, framework second.** The main chain calls the Anthropic SDK directly, so
+every model call, retry and tool dispatch is a plain function you can read, test with a fake
+client, and wrap in a span. The [LangGraph port](src/langgraph_agent.py) re-implements the
+same graph to compare the two. LangGraph forces clean node boundaries, and retry becomes a
+single conditional edge instead of logic spread across generate and verify. The tool loop,
+though, still runs imperatively inside one node. Notes in [LANGGRAPH.md](LANGGRAPH.md).
+Building it by hand first meant I knew exactly what the framework was abstracting.
+
+**Reciprocal Rank Fusion.** BM25 and cosine similarity produce scores on different scales,
+so you can't just add them. RRF only uses ranks (`1 / (60 + rank)`), so there's nothing to
+tune or normalize, and a chunk that both indexes rank highly comes out on top. BM25 catches
+exact terms (order states, product names). The embeddings catch paraphrases. "How do I get
+my money back" scores zero on BM25 but finds the refunds article semantically (there's a
+test for that).
+
+**A verification gate instead of trusting the model.** The system prompt already says "only
+answer from the documentation", and the model mostly follows it. "Mostly" isn't good enough
+for refund timelines and contact details. A second, narrow call that only asks whether this
+answer is supported by this context catches the cases the instructions miss, and its reason
+is fed back into the retry.
+
+**Human escalation as the floor.** After two failed attempts the agent stops and hands
+off, using a fixed message. A wrong answer about money or warranties costs more than a
+handoff, so the failure mode is "slower", not "wrong". Escalation rate is tracked in every
+eval report so it can't quietly creep up.
+
 ## Project structure
 
 ```
 src/
-  agent.py            orchestration chain (classify → retrieve → generate → verify)
+  agent.py            orchestration chain (classify → retrieve → generate → verify);
+                      the verify gate, retry and escalation fallback are in run_agent()
   ui.py               Streamlit demo UI (chat, uploads, signal badges)
   retrieval.py        BM25 lexical search + KB chunking
   embeddings.py       Voyage AI semantic embeddings (cached to data/vectors.json)
@@ -129,15 +200,23 @@ src/
   mcp_client.py       MCP client demo (lists tools/resources/prompts)
   multimodal.py       image / PDF → base64 content blocks
   conversations.py    JSON conversation persistence
-  verify / retry      grounding gate + fallback (in agent.py)
-  evals.py            graded eval harness (code + model grading)
+  tracing.py          OpenTelemetry setup + span helpers (no-op unless ATLAS_TRACING is set)
+  evals.py            eval harness CLI: live / record / replay, threshold gate
   langgraph_agent.py  parallel LangGraph port of the same chain
+tests/                offline pytest suite (fakes for Anthropic + Voyage, real MCP server in-memory)
+evals/
+  cases.json          eval cases
+  cassette.json       recorded model/embedding responses for offline replay
+scripts/
+  generate_data.py    builds the synthetic orders/customers
+  trace_dump.py       run one turn and print its span tree
 data/
   kb/*.md             knowledge-base articles
-  orders.json         50 synthetic orders
-  customers.json      synthetic customers
-  vectors.json        cached embeddings
-  conversations/      saved chats
+  orders.json         50 synthetic orders (scripts/generate_data.py)
+  customers.json      synthetic customers (customerN@example.com)
+  vectors.json        cached Voyage embeddings, aligned to load_kb() order
+  conversations/      chats saved by the UI at runtime (gitignored, not in the repo)
+  uploads/            files attached in the UI (gitignored, not in the repo)
 assets/
   atlas_pipeline.svg       request pipeline (above)
   atlas_architectures.svg  chain vs. workflow vs. agent comparison
@@ -145,8 +224,9 @@ assets/
 
 ## Tech stack
 
-Anthropic Claude (Haiku) · Model Context Protocol / FastMCP · Voyage AI embeddings ·
-`rank-bm25` · NumPy · Streamlit · LangGraph (parallel port).
+Anthropic Claude (Haiku, Sonnet as eval grader) · Model Context Protocol / FastMCP ·
+Voyage AI embeddings · `rank-bm25` · NumPy · OpenTelemetry (Langfuse via OTLP) · pytest ·
+ruff · GitHub Actions · Streamlit · LangGraph (parallel port) · Docker · Kubernetes.
 
 ---
 
@@ -159,3 +239,11 @@ inspectable. The [LangGraph port](src/langgraph_agent.py) re-implements the iden
 graph on LangChain transport as a side-by-side comparison of framework vs. hand-rolled.
 See [PROJECT.md](PROJECT.md) for the full scope and [PROGRESS.md](PROGRESS.md) for build
 history.
+
+All data in this repo is synthetic: the customers, orders and knowledge base describe a
+fictional company. Conversations and uploads are created locally at runtime and are not
+committed.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
